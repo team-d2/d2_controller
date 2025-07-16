@@ -77,6 +77,7 @@
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="pose" to="$(var controller_pose_topic_name)"/>
       <remap from="cmd_vel/stamped" to="cmd_vel_nav/stamped"/>
+      <remap from="cmd_vel" to="cmd_vel_nav"/>
       <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
@@ -100,26 +101,18 @@
       <remap from="cmd_vel" to="$(var cmd_vel_topic_name)"/>
       <remap from="vel_limit" to="$(var vel_limit_topic_name)"/>
       <remap from="accel_limit" to="$(var accel_limit_topic_name)"/>
-      <remap from="cmd_vel_nav" to="cmd_vel_nav/transformed"/>
       <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
     </composable_node>
+  </load_composable_node>
 
+
+  <!-- components(use_pose_transformer) -->
+  <load_composable_node
+      if="$(eval &quot;('$(var container_name)'!='-' and '$(var use_pose_transformer)')&quot;)"
+      target="$(var namespace)/$(var controller_name)/$(var container_name)">
     <!-- geometry_transformer -->
-    <composable_node
-        pkg="geometry_transformer"
-        plugin="geometry_transformer::ros2::TwistTransformerNode"
-        name="cmd_vel_transformer">
-      <param from="$(var params_file)" allow_substs="true"/>
-      <param name="publish_raw" value="true"/>
-      <remap from="twist" to="cmd_vel_nav/stamped"/>
-      <remap from="twist_raw/transformed" to="cmd_vel_nav/transformed"/>
-      <remap from="twist/transformed" to="cmd_vel_nav/transformed/stamped"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
-      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-      <extra_arg name="use_intra_process_comms" value="true"/>
-    </composable_node>
     <composable_node
         if="$(var use_pose_transformer)"
         pkg="geometry_transformer"
@@ -131,6 +124,13 @@
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
     </composable_node>
+  </load_composable_node>
+
+  <!-- components(use_global_plan_transformer) -->
+  <load_composable_node
+      if="$(eval &quot;('$(var container_name)'!='-' and '$(var use_global_plan_transformer)')&quot;)"
+      target="$(var namespace)/$(var controller_name)/$(var container_name)">
+    <!-- geometry_transformer -->
     <composable_node
         if="$(var use_global_plan_transformer)"
         pkg="geometry_transformer"
@@ -144,6 +144,7 @@
       <extra_arg name="use_intra_process_comms" value="true"/>
     </composable_node>
   </load_composable_node>
+      
 
   <!-- exec -->
   <group if="$(eval &quot;'$(var container_name)'=='-'&quot;)">
@@ -176,6 +177,7 @@
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="pose" to="$(var controller_pose_topic_name)"/>
       <remap from="cmd_vel/stamped" to="cmd_vel_nav/stamped"/>
+      <remap from="cmd_vel" to="cmd_vel_nav"/>
       <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
     </node>
@@ -188,7 +190,6 @@
       <remap from="cmd_vel" to="$(var cmd_vel_topic_name)"/>
       <remap from="vel_limit" to="$(var vel_limit_topic_name)"/>
       <remap from="accel_limit" to="$(var accel_limit_topic_name)"/>
-      <remap from="cmd_vel_nav" to="cmd_vel_nav/transformed"/>
       <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
     </node>

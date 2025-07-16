@@ -52,13 +52,15 @@ public:
     const std::string & node_name, const std::string node_namespace,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : rclcpp::Node(node_name, node_namespace, options),
-    frame_id_(this->declare_parameter<std::string>("default_frame_id", "map")),
+    frame_id_(),
+    pose_frame_id_(this->declare_parameter<std::string>("pose_frame_id", "base_link")),
     cmd_vel_distance_rate_(this->declare_parameter<double>("cmd_vel_distance_rate", 0.2)),
     position_vec_(),
     direction_vec_(),
     target_point_vec_(),
     target_point_received_(false),
-    cmd_vel_stamped_pub_(this->create_publisher<TwistStampedMsg>("cmd_vel/stamped", 10)),
+    cmd_vel_pub_(this->create_publisher<TwistMsg>("cmd_vel", 10)),
+    cmd_vel_stamped_pub_(!pose_frame_id_.empty() ? this->create_publisher<TwistStampedMsg>("cmd_vel/stamped", 10) : nullptr),
     pose_sub_(this->create_subscription<PoseMsg>(
         "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {this->update_pose(std::move(msg));})),
     target_point_sub_(
@@ -85,7 +87,7 @@ public:
   ~TargetPointFollowerNode() override {}
 
 private:
-  void publish_cmd_vel()
+  void publish_cmd_vel(const builtin_interfaces::msg::Time & stamp)
   {
     // clculate cmd_vel
     const auto vec = target_point_vec_ - position_vec_;
@@ -93,17 +95,24 @@ private:
     const auto rot_length = rot_vec.length();
     const auto dot = direction_vec_.dot(vec);
     const auto angle = std::atan2(rot_length, dot);
-    const auto vel_linear_vec =
-      direction_vec_ * (vec.length2() * angle / rot_length * cmd_vel_distance_rate_);
-    const auto vel_angular_vec = rot_vec * (angle / rot_length * cmd_vel_distance_rate_);
+    const auto linear_speed = direction_vec_.length() * vec.length2() * angle / rot_length * cmd_vel_distance_rate_;
+    const auto angular_speed = angle * cmd_vel_distance_rate_;
+
+    // publish cmd_vel
+    auto cmd_vel_msg = std::make_unique<TwistMsg>();
+    cmd_vel_msg->linear.x = linear_speed;
+    cmd_vel_msg->angular.z = angular_speed;
+    cmd_vel_pub_->publish(std::move(cmd_vel_msg));
 
     // publish cmd_vel_stamped
-    auto cmd_vel_stamped_msg = std::make_unique<TwistStampedMsg>();
-    cmd_vel_stamped_msg->header.stamp = this->now();
-    cmd_vel_stamped_msg->header.frame_id = frame_id_;
-    cmd_vel_stamped_msg->twist.linear = tf2::toMsg(vel_linear_vec);
-    cmd_vel_stamped_msg->twist.angular = tf2::toMsg(vel_angular_vec);
-    cmd_vel_stamped_pub_->publish(std::move(cmd_vel_stamped_msg));
+    if (cmd_vel_stamped_pub_) {
+      auto cmd_vel_stamped_msg = std::make_unique<TwistStampedMsg>();
+      cmd_vel_stamped_msg->header.stamp = stamp;
+      cmd_vel_stamped_msg->header.frame_id = pose_frame_id_;
+      cmd_vel_stamped_msg->twist.linear.x = linear_speed;
+      cmd_vel_stamped_msg->twist.angular.z = angular_speed;
+      cmd_vel_stamped_pub_->publish(std::move(cmd_vel_stamped_msg));
+    }
   }
 
   void update_pose(const PoseMsg::ConstSharedPtr & pose_msg)
@@ -127,7 +136,7 @@ private:
 
     // publish cmd_vel
     if (target_point_received_) {
-      this->publish_cmd_vel();
+      this->publish_cmd_vel(pose_msg->header.stamp);
     }
   }
 
@@ -150,11 +159,11 @@ private:
     tf2::fromMsg(target_point_msg->point, target_point_vec_);
 
     // publish cmd_vel
-    this->publish_cmd_vel();
+    this->publish_cmd_vel(target_point_msg->header.stamp);
   }
 
   // parameters
-  std::string frame_id_;
+  std::string frame_id_, pose_frame_id_;
   double cmd_vel_distance_rate_;
 
   // pose & target point
@@ -162,6 +171,7 @@ private:
   bool target_point_received_;
 
   // publisher
+  rclcpp::Publisher<TwistMsg>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<TwistStampedMsg>::SharedPtr cmd_vel_stamped_pub_;
 
   // subscriptions

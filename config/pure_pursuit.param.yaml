@@ -1,6 +1,7 @@
 /**:
   ros__parameters:
     frame_id: "map"
+    pose_frame_id: ""
     lookahead_distance: 1.0
     cmd_vel_distance_rate: 0.2
     vel_limit:
@@ -22,7 +23,3 @@
         y: .inf
         z: 2.0
     cmd_vel_timeout: 10.0
-
-$(var namespace)/$(var controller_name)/cmd_vel_transformer:
-  ros__parameters:
-    frame_id: "base_footprint"
