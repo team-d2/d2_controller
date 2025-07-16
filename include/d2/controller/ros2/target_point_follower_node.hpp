@@ -39,7 +39,6 @@ public:
     const std::string & node_name, const std::string node_namespace,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : rclcpp::Node(node_name, node_namespace, options),
-    base_footprint_frame_id_(this->declare_parameter<std::string>("base_footprint_frame_id", "base_footprint")),
     frame_id_(this->declare_parameter<std::string>("default_frame_id", "map")),
     cmd_vel_distance_rate_(this->declare_parameter<double>("cmd_vel_distance_rate", 0.2)),
     initialized_flag_(InitializedFlag::kNone),
@@ -207,7 +206,6 @@ private:
   }
 
   // parameters
-  std::string base_footprint_frame_id_;
   std::string frame_id_;
   double cmd_vel_distance_rate_;
 
