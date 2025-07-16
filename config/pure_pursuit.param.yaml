@@ -3,6 +3,7 @@
     default_frame_id: "map"
     base_footprint_frame_id: "base_footprint"
     lookahead_distance: 1.0
+    cmd_vel_distance_rate: 0.2
     vel_limit:
       linear:
         x: 1.0

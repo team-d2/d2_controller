@@ -41,6 +41,7 @@ public:
   : rclcpp::Node(node_name, node_namespace, options),
     base_footprint_frame_id_(this->declare_parameter<std::string>("base_footprint_frame_id", "base_footprint")),
     frame_id_(this->declare_parameter<std::string>("default_frame_id", "map")),
+    cmd_vel_distance_rate_(this->declare_parameter<double>("cmd_vel_distance_rate", 0.2)),
     initialized_flag_(InitializedFlag::kNone),
     position_vec_(),
     direction_vec_(),
@@ -85,8 +86,8 @@ private:
     const auto rot_length = rot_vec.length();
     const auto dot = direction_vec_.dot(vec);
     const auto angle = std::atan2(rot_length, dot);
-    const auto vel_linear_vec = direction_vec_ * (vec.length2() * angle / rot_length);
-    const auto vel_angular_vec = rot_vec * (angle / rot_length);
+    const auto vel_linear_vec = direction_vec_ * (vec.length2() * angle / rot_length * cmd_vel_distance_rate_);
+    const auto vel_angular_vec = rot_vec * (angle / rot_length * cmd_vel_distance_rate_);
 
     // publish cmd_vel_stamped
     auto cmd_vel_stamped_msg = std::make_unique<TwistStampedMsg>();
@@ -208,6 +209,7 @@ private:
   // parameters
   std::string base_footprint_frame_id_;
   std::string frame_id_;
+  double cmd_vel_distance_rate_;
 
   // initialized flag
   enum class InitializedFlag
