@@ -113,8 +113,8 @@
     </node>
     <node
         pkg="$(var project_name)"
-        exec="target_point_fillower_node"
-        name="d2_target_point_fillower"
+        exec="target_point_follower_node"
+        name="d2_target_point_follower"
         output="screen">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="target_point" to="controller/target_point"/>
