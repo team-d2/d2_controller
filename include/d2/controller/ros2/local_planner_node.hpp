@@ -55,7 +55,7 @@ public:
     global_plan_(),
     pose_opt_(std::nullopt),
     tf_buffer_(this->get_clock()),
-    tf_listener_(tf_buffer_),
+    tf_listener_(tf_buffer_, this),
     local_plan_pub_(this->create_publisher<PathMsg>("local_plan", 10)),
     global_plan_sub_(this->create_subscription<PathMsg>(
         "global_plan", 10,

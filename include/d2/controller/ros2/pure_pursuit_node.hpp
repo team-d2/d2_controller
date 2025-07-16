@@ -55,7 +55,7 @@ public:
     default_frame_id_(this->declare_parameter<std::string>("default_frame_id", "map")),
     lookahead_distance_(this->declare_parameter<double>("lookahead_distance", 1.0)),
     tf_buffer_(this->get_clock()),
-    tf_listener_(tf_buffer_),
+    tf_listener_(tf_buffer_, this),
     target_point_pub_(this->create_publisher<PointMsg>("target_point", 10)),
     local_plan_sub_(this->create_subscription<PathMsg>(
         "local_plan", 10, [this](PathMsg::ConstSharedPtr msg) {this->run(std::move(msg));}))

@@ -61,7 +61,7 @@ public:
     direction_vec_(),
     target_point_vec_(0.0, 0.0, 0.0),
     tf_buffer_(this->get_clock()),
-    tf_listener_(tf_buffer_),
+    tf_listener_(tf_buffer_, this),
     cmd_vel_stamped_pub_(this->create_publisher<TwistStampedMsg>("cmd_vel/stamped", 10)),
     pose_sub_(this->create_subscription<PoseMsg>(
         "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {this->initialize_pose(std::move(msg));})),
