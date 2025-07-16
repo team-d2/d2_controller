@@ -1,3 +1,17 @@
+// Copyright 2025 miyajimad0620
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #ifndef D2__CONTROLLER__ROS2__TARGET_POINT_FOLLOWER_NODE_HPP_
 #define D2__CONTROLLER__ROS2__TARGET_POINT_FOLLOWER_NODE_HPP_
 
@@ -5,20 +19,20 @@
 #include <string>
 #include <variant>
 
+#include "d2/controller/stamped.hpp"
+#include "d2/controller/vector3.hpp"
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "visibility.hpp"
-#include "d2/controller/stamped.hpp"
-#include "d2/controller/vector3.hpp"
 #include "tf2/LinearMath/Transform.hpp"
 #include "tf2/LinearMath/Vector3.hpp"
 #include "tf2/convert.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "visibility.hpp"
 
 namespace d2::controller::ros2
 {
@@ -48,16 +62,12 @@ public:
     tf_buffer_(this->get_clock()),
     tf_listener_(tf_buffer_),
     cmd_vel_stamped_pub_(this->create_publisher<TwistStampedMsg>("cmd_vel/stamped", 10)),
-    pose_sub_(
-      this->create_subscription<PoseMsg>(
-        "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {
-          this->initialize_pose(std::move(msg));
-        })),
+    pose_sub_(this->create_subscription<PoseMsg>(
+        "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {this->initialize_pose(std::move(msg));})),
     target_point_sub_(
       this->create_subscription<PointMsg>(
-        "target_point", 10, [this](PointMsg::ConstSharedPtr msg) {
-          this->initialize_target_point(std::move(msg));
-        }))
+        "target_point", 10,
+        [this](PointMsg::ConstSharedPtr msg) {this->initialize_target_point(std::move(msg));}))
   {
   }
 
@@ -69,7 +79,8 @@ public:
   }
 
   D2__CONTROLLER__ROS2_PUBLIC
-  explicit inline TargetPointFollowerNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
+  explicit inline TargetPointFollowerNode(
+    const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : TargetPointFollowerNode(kDefaultNodeName, "", options)
   {
   }
@@ -85,7 +96,8 @@ private:
     const auto rot_length = rot_vec.length();
     const auto dot = direction_vec_.dot(vec);
     const auto angle = std::atan2(rot_length, dot);
-    const auto vel_linear_vec = direction_vec_ * (vec.length2() * angle / rot_length * cmd_vel_distance_rate_);
+    const auto vel_linear_vec =
+      direction_vec_ * (vec.length2() * angle / rot_length * cmd_vel_distance_rate_);
     const auto vel_angular_vec = rot_vec * (angle / rot_length * cmd_vel_distance_rate_);
 
     // publish cmd_vel_stamped
@@ -100,13 +112,10 @@ private:
   void start_update()
   {
     pose_sub_ = this->create_subscription<PoseMsg>(
-      "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {
-        this->update_pose(std::move(msg));
-      });
+      "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {this->update_pose(std::move(msg));});
     target_point_sub_ = this->create_subscription<PointMsg>(
-      "target_point", 10, [this](PointMsg::ConstSharedPtr msg) {
-        this->update_target_point(std::move(msg));
-      });
+      "target_point", 10,
+      [this](PointMsg::ConstSharedPtr msg) {this->update_target_point(std::move(msg));});
     this->publish_cmd_vel();
   }
 
@@ -119,8 +128,7 @@ private:
     // get tf
     TfMsg tf_msg;
     try {
-      tf_msg = tf_buffer_.lookupTransform(
-        frame_id_, frame_id, rclcpp::Time(0));
+      tf_msg = tf_buffer_.lookupTransform(frame_id_, frame_id, rclcpp::Time(0));
     } catch (const tf2::TransformException & ex) {
       RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
       return;
@@ -148,8 +156,8 @@ private:
     // get target point tf
     TfMsg tf_msg;
     try {
-      tf_msg = tf_buffer_.lookupTransform(
-        target_point_msg->header.frame_id, frame_id_, rclcpp::Time(0));
+      tf_msg =
+        tf_buffer_.lookupTransform(target_point_msg->header.frame_id, frame_id_, rclcpp::Time(0));
     } catch (const tf2::TransformException & ex) {
       RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
       return;
@@ -233,6 +241,6 @@ private:
   rclcpp::Subscription<PointMsg>::SharedPtr target_point_sub_;
 };
 
-}  // namespace d2__controller::ros2
+}  // namespace d2::controller::ros2
 
 #endif  // D2__CONTROLLER__ROS2__TARGET_POINT_FOLLOWER_NODE_HPP_

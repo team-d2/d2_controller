@@ -1,3 +1,17 @@
+// Copyright 2025 miyajimad0620
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #ifndef D2__CONTROLLER__ROS2__CMD_VEL_TRANSFORMER_NODE_HPP_
 #define D2__CONTROLLER__ROS2__CMD_VEL_TRANSFORMER_NODE_HPP_
 
@@ -5,15 +19,15 @@
 #include <string>
 #include <variant>
 
-#include "visibility.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "tf2/LinearMath/Transform.hpp"
 #include "tf2/LinearMath/Vector3.hpp"
 #include "tf2/convert.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "visibility.hpp"
 
 namespace d2::controller::ros2
 {
@@ -32,15 +46,14 @@ public:
     const std::string & node_name, const std::string node_namespace,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : rclcpp::Node(node_name, node_namespace, options),
-    base_footprint_frame_id_(this->declare_parameter<std::string>("base_footprint_frame_id", "base_footprint")),
+    base_footprint_frame_id_(
+      this->declare_parameter<std::string>("base_footprint_frame_id", "base_footprint")),
     tf_buffer_(this->get_clock()),
     tf_listener_(tf_buffer_),
     cmd_vel_pub_(this->create_publisher<TwistMsg>("cmd_vel", 10)),
-    cmd_vel_stamped_sub_(
-      this->create_subscription<TwistStampedMsg>(
-        "cmd_vel/stamped", 10, [this](TwistStampedMsg::ConstSharedPtr msg) {
-          this->transform(std::move(msg));
-        }))
+    cmd_vel_stamped_sub_(this->create_subscription<TwistStampedMsg>(
+        "cmd_vel/stamped", 10,
+        [this](TwistStampedMsg::ConstSharedPtr msg) {this->transform(std::move(msg));}))
   {
   }
 
@@ -80,7 +93,7 @@ private:
     tf2::fromMsg(cmd_vel_stamped_msg->twist.linear, vel_linear_vec);
     tf2::Vector3 vel_angular_vec;
     tf2::fromMsg(cmd_vel_stamped_msg->twist.angular, vel_angular_vec);
-    
+
     // publish transformed cmd_vel
     auto cmd_vel_msg = std::make_unique<TwistMsg>();
     cmd_vel_msg->linear = tf2::toMsg(mat * vel_linear_vec);
@@ -102,6 +115,6 @@ private:
   rclcpp::Subscription<TwistStampedMsg>::SharedPtr cmd_vel_stamped_sub_;
 };
 
-}  // namespace d2__controller::ros2
+}  // namespace d2::controller::ros2
 
 #endif  // D2__CONTROLLER__ROS2__CMD_VEL_TRANSFORMER_NODE_HPP_

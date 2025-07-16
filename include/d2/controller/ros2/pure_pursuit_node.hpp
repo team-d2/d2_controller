@@ -1,3 +1,17 @@
+// Copyright 2025 miyajimad0620
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #ifndef D2__CONTROLLER__ROS2__PURE_PURSUIT_NODE_HPP_
 #define D2__CONTROLLER__ROS2__PURE_PURSUIT_NODE_HPP_
 
@@ -5,19 +19,19 @@
 #include <string>
 #include <variant>
 
-#include "geometry_msgs/msg/point_stamped.hpp"
-#include "nav_msgs/msg/path.hpp"
-#include "rclcpp/rclcpp.hpp"
-#include "visibility.hpp"
 #include "d2/controller/pure_pursuit.hpp"
 #include "d2/controller/stamped.hpp"
 #include "d2/controller/vector3.hpp"
+#include "geometry_msgs/msg/point_stamped.hpp"
+#include "nav_msgs/msg/path.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "tf2/LinearMath/Transform.hpp"
 #include "tf2/LinearMath/Vector3.hpp"
 #include "tf2/convert.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "visibility.hpp"
 
 namespace d2::controller::ros2
 {
@@ -41,11 +55,8 @@ public:
     tf_buffer_(this->get_clock()),
     tf_listener_(tf_buffer_),
     target_point_pub_(this->create_publisher<PointMsg>("target_point", 10)),
-    local_plan_sub_(
-      this->create_subscription<PathMsg>(
-        "local_plan", 10, [this](PathMsg::ConstSharedPtr msg) {
-          this->run(std::move(msg));
-        }))
+    local_plan_sub_(this->create_subscription<PathMsg>(
+        "local_plan", 10, [this](PathMsg::ConstSharedPtr msg) {this->run(std::move(msg));}))
   {
   }
 
@@ -68,10 +79,12 @@ private:
   void run(const PathMsg::ConstSharedPtr & local_plan_msg)
   {
     // frame_id
-    const auto frame_id = local_plan_msg->header.frame_id.empty() ? default_frame_id_ : local_plan_msg->header.frame_id;
-    
+    const auto frame_id =
+      local_plan_msg->header.frame_id.empty() ? default_frame_id_ : local_plan_msg->header.frame_id;
+
     // get tfs
-    std::map<std::string, tf2::Transform> tf_map = {{"", tf2::Transform(tf2::Quaternion(0, 0, 0, 1), tf2::Vector3(0, 0, 0))}};
+    std::map<std::string, tf2::Transform> tf_map = {
+      {"", tf2::Transform(tf2::Quaternion(0, 0, 0, 1), tf2::Vector3(0, 0, 0))}};
     for (const auto & pose_msg_data : local_plan_msg->poses) {
       auto & section_frame_id = pose_msg_data.header.frame_id;
       if (tf_map.count(section_frame_id) > 0) {
@@ -79,8 +92,7 @@ private:
       }
       TfMsg tf_msg;
       try {
-        tf_msg = tf_buffer_.lookupTransform(
-          section_frame_id, frame_id, rclcpp::Time(0));
+        tf_msg = tf_buffer_.lookupTransform(section_frame_id, frame_id, rclcpp::Time(0));
       } catch (const tf2::TransformException & ex) {
         RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
         return;
@@ -99,7 +111,9 @@ private:
       const auto pose_vec = tf_map[pose_msg_data.header.frame_id] * pose_relative_vec;
 
       Stamped<Vector3> point_stamped;
-      point_stamped.stamp_nanosec = static_cast<std::uint64_t>(pose_msg_data.header.stamp.sec * 1e9) + pose_msg_data.header.stamp.nanosec;
+      point_stamped.stamp_nanosec =
+        static_cast<std::uint64_t>(pose_msg_data.header.stamp.sec * 1e9) +
+        pose_msg_data.header.stamp.nanosec;
       point_stamped.data.x = pose_vec.x();
       point_stamped.data.y = pose_vec.y();
       point_stamped.data.z = pose_vec.z();
@@ -112,7 +126,7 @@ private:
       RCLCPP_WARN_ONCE(this->get_logger(), "No target point found in the local plan.");
       return;
     }
-    
+
     // publish the target point
     auto target_point_msg = std::make_unique<PointMsg>();
     target_point_msg->header.frame_id = frame_id;
@@ -138,6 +152,6 @@ private:
   rclcpp::Subscription<PathMsg>::SharedPtr local_plan_sub_;
 };
 
-}  // namespace d2__controller::ros2
+}  // namespace d2::controller::ros2
 
 #endif  // D2__CONTROLLER__ROS2__PURE_PURSUIT_NODE_HPP_
