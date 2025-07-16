@@ -1,0 +1,147 @@
+<launch>
+  <!-- package configs -->
+  <let name="project_name" value="d2_controller"/>
+  <let name="project_namespace" value="d2::controller"/>
+  <let name="project_share" value="$(find-pkg-share $(var project_name))"/>
+
+  <!-- global args -->
+  <arg name="namespace" default=""/>
+  <arg name="container_name" default="d2_controller_container"/>
+  <arg name="thread_num" default="2"/>
+  <arg name="params_file" default="$(var project_share)/config/pure_pursuit.param.yaml"/>
+  <arg name="use_sim_time" default="false"/>
+
+  <!-- namespace -->
+  <push_ros_namespace namespace="$(var namespace)"/>
+
+  <!-- global parameters -->
+  <set_parameter name="use_sim_time" value="$(var use_sim_time)"/>
+
+  <!-- container -->
+  <node_container
+      if="$(eval &quot;('$(var thread_num)'>='1') and ('$(var container_name)'!='-')&quot;)"
+      pkg="rclcpp_components"
+      exec="component_container_mt"
+      namespace="$(var namespace)"
+      name="$(var container_name)"
+      output="screen">
+    <param name="thread_num" value="$(var thread_num)"/>
+  </node_container>
+
+  <!-- components -->
+  <load_composable_node
+      if="$(eval &quot;'$(var container_name)'!='-'&quot;)"
+      target="$(var namespace)/$(var container_name)">
+    <!-- controller -->
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::LocalPlannerNode"
+        name="d2_local_planner">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="local_plan" to="controller/local_plan"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::PurePursuitNode"
+        name="d2_pure_pursuit">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="local_plan" to="controller/local_plan"/>
+      <remap from="target_point" to="controller/target_point"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::TargetPointFollowerNode"
+        name="d2_target_point_follower">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="target_point" to="controller/target_point"/>
+      <remap from="cmd_vel/stamped" to="controller/cmd_vel_nav/stamped"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::CmdVelTransformerNode"
+        name="d2_cmd_vel_transformer">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="cmd_vel/stamped" to="controller/cmd_vel_nav/stamped"/>
+      <remap from="cmd_vel" to="controller/cmd_vel_nav"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::CmdVelLimiterNode"
+        name="d2_cmd_vel_limiter">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="cmd_vel_nav" to="controller/cmd_vel_nav"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+  </load_composable_node>
+
+  <!-- exec -->
+  <group if="$(eval &quot;'$(var container_name)'=='-'&quot;)">
+    <!-- controller -->
+    <node
+        pkg="$(var project_name)"
+        exec="local_planner_node"
+        name="d2_local_planner"
+        output="screen">
+      <remap from="local_plan" to="controller/local_plan"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+    </node>
+    <node
+        pkg="$(var project_name)"
+        exec="pure_pursuit_node"
+        name="d2_pure_pursuit"
+        output="screen">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="local_plan" to="controller/local_plan"/>
+      <remap from="target_point" to="controller/target_point"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+    </node>
+    <node
+        pkg="$(var project_name)"
+        exec="target_point_fillower_node"
+        name="d2_target_point_fillower"
+        output="screen">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="target_point" to="controller/target_point"/>
+      <remap from="cmd_vel/stamped" to="controller/cmd_vel_nav/stamped"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+    </node>
+    <node
+        pkg="$(var project_name)"
+        exec="cmd_vel_transformer_node"
+        name="d2_cmd_vel_transformer"
+        output="screen">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="cmd_vel/stamped" to="controller/cmd_vel_nav/stamped"/>
+      <remap from="cmd_vel" to="controller/cmd_vel_nav"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+    </node>
+    <node
+        pkg="$(var project_name)"
+        exec="cmd_vel_limiter_node"
+        name="d2_cmd_vel_limiter"
+        output="screen">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="cmd_vel_nav" to="controller/cmd_vel_nav"/>
+      <remap from="/tf" to="tf"/>
+      <remap from="/diagnostics" to="diagnostics"/>
+    </node>
+  </group>
+</launch>

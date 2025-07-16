@@ -1,0 +1,4 @@
+/**:
+  ros__parameters:
+    default_frame_id: "map"
+    lookahead_distance: 1.0
