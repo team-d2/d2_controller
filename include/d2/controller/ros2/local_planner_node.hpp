@@ -29,8 +29,6 @@
 #include "tf2/LinearMath/Vector3.hpp"
 #include "tf2/convert.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
-#include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
 #include "visibility.hpp"
 
 namespace d2::controller::ros2
@@ -50,12 +48,9 @@ public:
     const std::string & node_name, const std::string node_namespace,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : rclcpp::Node(node_name, node_namespace, options),
-    default_frame_id_(this->declare_parameter<std::string>("default_frame_id", "map")),
-    frame_id_(default_frame_id_),
+    frame_id_(),
     global_plan_(),
     pose_opt_(std::nullopt),
-    tf_buffer_(this->get_clock()),
-    tf_listener_(tf_buffer_),
     local_plan_pub_(this->create_publisher<PathMsg>("local_plan", 10)),
     global_plan_sub_(this->create_subscription<PathMsg>(
         "global_plan", 10,
@@ -112,69 +107,41 @@ private:
 
   void update_global_plan(const PathMsg::SharedPtr & global_plan_msg)
   {
-    // get frame_id
-    auto frame_id = global_plan_msg->header.frame_id.empty() ? default_frame_id_ :
-      global_plan_msg->header.frame_id;
-
-    // update pose & frame_id
-    if (frame_id != frame_id_) {
-      // update pose
-      frame_id_ = frame_id;
-      if (pose_opt_.has_value()) {
-        auto & pose = pose_opt_.value();
-        const auto pos_old_vec = tf2::Vector3(pose.data.x, pose.data.y, pose.data.z);
-        TfMsg tf_msg;
-        try {
-          tf_msg = tf_buffer_.lookupTransform(frame_id_, frame_id, rclcpp::Time(0));
-        } catch (const tf2::TransformException & ex) {
-          RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
-          return;
-        }
-        tf2::Transform tf;
-        tf2::fromMsg(tf_msg.transform, tf);
-        const auto pos_vec = tf * pos_old_vec;
-        pose.data.x = pos_vec.x();
-        pose.data.y = pos_vec.y();
-        pose.data.z = pos_vec.z();
-      }
-
-      // update frame_id
-      frame_id_ = frame_id;
+    // check frame_id
+    if (frame_id_.empty()) {
+      return;
     }
 
-    // get tfs
-    std::map<std::string, tf2::Transform> tf_map = {
-      {"", tf2::Transform(tf2::Quaternion(0, 0, 0, 1), tf2::Vector3(0, 0, 0))}};
+    if (global_plan_msg->header.frame_id != frame_id_) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "global_plan frame_id '%s' does not match pose frame_id '%s'. "
+        "Topic is ignored.",
+        global_plan_msg->header.frame_id.c_str(), frame_id_.c_str());
+      return;
+    }
+
     for (const auto & pose_msg_data : global_plan_msg->poses) {
-      auto & section_frame_id = pose_msg_data.header.frame_id;
-      if (tf_map.count(section_frame_id) > 0) {
-        continue;
-      }
-      TfMsg tf_msg;
-      try {
-        tf_msg = tf_buffer_.lookupTransform(section_frame_id, frame_id_, rclcpp::Time(0));
-      } catch (const tf2::TransformException & ex) {
-        RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
+      if (!pose_msg_data.header.frame_id.empty() && pose_msg_data.header.frame_id != frame_id_) {
+        RCLCPP_WARN(
+          this->get_logger(),
+          "global_plan pose frame_id '%s' does not match pose frame_id '%s'. "
+          "Topic is ignored.",
+          pose_msg_data.header.frame_id.c_str(), frame_id_.c_str());
         return;
       }
-      tf2::Transform tf;
-      tf2::fromMsg(tf_msg.transform, tf);
-      tf_map[section_frame_id] = tf;
     }
 
     global_plan_.clear();
     global_plan_.reserve(global_plan_msg->poses.size());
     for (const auto & pose_msg_data : global_plan_msg->poses) {
-      tf2::Vector3 pose_relative_vec;
-      tf2::fromMsg(pose_msg_data.pose.position, pose_relative_vec);
-      const auto pose_vec = tf_map[pose_msg_data.header.frame_id] * pose_relative_vec;
       Stamped<Vector3> point_stamped;
       point_stamped.stamp_nanosec =
         static_cast<std::uint64_t>(pose_msg_data.header.stamp.sec * 1e9) +
         pose_msg_data.header.stamp.nanosec;
-      point_stamped.data.x = pose_vec.x();
-      point_stamped.data.y = pose_vec.y();
-      point_stamped.data.z = pose_vec.z();
+      point_stamped.data.x = pose_msg_data.pose.position.x;
+      point_stamped.data.y = pose_msg_data.pose.position.y;
+      point_stamped.data.z = pose_msg_data.pose.position.z;
       global_plan_.push_back(point_stamped);
     }
 
@@ -185,18 +152,19 @@ private:
   void update_pose(const PoseMsg::SharedPtr & pose_msg)
   {
     // get pose tf
-    TfMsg tf_msg;
-    try {
-      tf_msg = tf_buffer_.lookupTransform(pose_msg->header.frame_id, frame_id_, rclcpp::Time(0));
-    } catch (const tf2::TransformException & ex) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
+    if (frame_id_.empty()) {
+      frame_id_ = pose_msg->header.frame_id;
+    }
+    else if (frame_id_ != pose_msg->header.frame_id) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "pose frame_id '%s' does not match current frame_id '%s'. "
+        "Topic is ignored.",
+        pose_msg->header.frame_id.c_str(), frame_id_.c_str());
       return;
     }
-    tf2::Transform tf;
-    tf2::fromMsg(tf_msg.transform, tf);
-    tf2::Vector3 pose_relative_vec;
-    tf2::fromMsg(pose_msg->pose.position, pose_relative_vec);
-    const auto pose_vec = tf * pose_relative_vec;
+    tf2::Vector3 pose_vec;
+    tf2::fromMsg(pose_msg->pose.position, pose_vec);
 
     // update pose
     Stamped<Vector3> pose;
@@ -212,13 +180,9 @@ private:
   }
 
   // path & pose
-  std::string default_frame_id_, frame_id_;
+  std::string frame_id_;
   std::vector<Stamped<Vector3>> global_plan_;
   std::optional<Stamped<Vector3>> pose_opt_;
-
-  // tf buffer
-  tf2_ros::Buffer tf_buffer_;
-  tf2_ros::TransformListener tf_listener_;
 
   // publisher
   rclcpp::Publisher<PathMsg>::SharedPtr local_plan_pub_;

@@ -31,8 +31,6 @@
 #include "tf2/LinearMath/Vector3.hpp"
 #include "tf2/convert.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
-#include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
 #include "visibility.hpp"
 
 namespace d2::controller::ros2
@@ -56,19 +54,17 @@ public:
   : rclcpp::Node(node_name, node_namespace, options),
     frame_id_(this->declare_parameter<std::string>("default_frame_id", "map")),
     cmd_vel_distance_rate_(this->declare_parameter<double>("cmd_vel_distance_rate", 0.2)),
-    initialized_flag_(InitializedFlag::kNone),
     position_vec_(),
     direction_vec_(),
-    target_point_vec_(0.0, 0.0, 0.0),
-    tf_buffer_(this->get_clock()),
-    tf_listener_(tf_buffer_),
+    target_point_vec_(),
+    target_point_received_(false),
     cmd_vel_stamped_pub_(this->create_publisher<TwistStampedMsg>("cmd_vel/stamped", 10)),
     pose_sub_(this->create_subscription<PoseMsg>(
-        "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {this->initialize_pose(std::move(msg));})),
+        "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {this->update_pose(std::move(msg));})),
     target_point_sub_(
       this->create_subscription<PointMsg>(
         "target_point", 10,
-        [this](PointMsg::ConstSharedPtr msg) {this->initialize_target_point(std::move(msg));}))
+        [this](PointMsg::ConstSharedPtr msg) {this->update_target_point(std::move(msg));}))
   {
   }
 
@@ -110,107 +106,50 @@ private:
     cmd_vel_stamped_pub_->publish(std::move(cmd_vel_stamped_msg));
   }
 
-  void start_update()
-  {
-    pose_sub_ = this->create_subscription<PoseMsg>(
-      "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {this->update_pose(std::move(msg));});
-    target_point_sub_ = this->create_subscription<PointMsg>(
-      "target_point", 10,
-      [this](PointMsg::ConstSharedPtr msg) {this->update_target_point(std::move(msg));});
-    this->publish_cmd_vel();
-  }
-
-  void update_frame_id(const std::string & frame_id)
-  {
-    if (frame_id == frame_id_) {
-      return;
-    }
-
-    // get tf
-    TfMsg tf_msg;
-    try {
-      tf_msg = tf_buffer_.lookupTransform(frame_id_, frame_id, rclcpp::Time(0));
-    } catch (const tf2::TransformException & ex) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
-      return;
-    }
-    tf2::Transform tf;
-    tf2::fromMsg(tf_msg.transform, tf);
-
-    // transform target point
-    target_point_vec_ = tf * target_point_vec_;
-  }
-
-  void set_pose(PoseMsg::ConstSharedPtr pose_msg)
-  {
-    this->update_frame_id(pose_msg->header.frame_id);
-
-    frame_id_ = pose_msg->header.frame_id;
-    tf2::fromMsg(pose_msg->pose.position, position_vec_);
-    tf2::Quaternion orientation;
-    tf2::fromMsg(pose_msg->pose.orientation, orientation);
-    direction_vec_ = tf2::Matrix3x3(orientation) * tf2::Vector3(1.0, 0.0, 0.0);
-  }
-
-  void set_target_point(PointMsg::ConstSharedPtr target_point_msg)
-  {
-    // get target point tf
-    TfMsg tf_msg;
-    try {
-      tf_msg =
-        tf_buffer_.lookupTransform(target_point_msg->header.frame_id, frame_id_, rclcpp::Time(0));
-    } catch (const tf2::TransformException & ex) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to get transform: %s", ex.what());
-      return;
-    }
-    tf2::Transform tf;
-    tf2::fromMsg(tf_msg.transform, tf);
-
-    // set target_point_vec
-    tf2::Vector3 target_point_relative_vec;
-    tf2::fromMsg(target_point_msg->point, target_point_relative_vec);
-    target_point_vec_ = tf * target_point_relative_vec;
-  }
-
-  void initialize_pose(PoseMsg::ConstSharedPtr pose_msg)
-  {
-    // set pose
-    this->set_pose(std::move(pose_msg));
-
-    // set flag
-    initialized_flag_ = static_cast<InitializedFlag>(
-      static_cast<int>(initialized_flag_) | static_cast<int>(InitializedFlag::kPose));
-
-    // if both pose and target point are initialized, start update
-    if (initialized_flag_ == InitializedFlag::kAll) {
-      this->start_update();
-    }
-  }
-
-  void initialize_target_point(PointMsg::ConstSharedPtr target_point_msg)
-  {
-    // set target point
-    this->set_target_point(std::move(target_point_msg));
-
-    // set flag
-    initialized_flag_ = static_cast<InitializedFlag>(
-      static_cast<int>(initialized_flag_) | static_cast<int>(InitializedFlag::kTargetPoint));
-
-    // if both pose and target point are initialized, start update
-    if (initialized_flag_ == InitializedFlag::kAll) {
-      this->start_update();
-    }
-  }
-
   void update_pose(const PoseMsg::ConstSharedPtr & pose_msg)
   {
-    this->set_pose(pose_msg);
-    this->publish_cmd_vel();
+    // check frame_id
+    if (frame_id_.empty()) {
+      frame_id_ = pose_msg->header.frame_id;
+    } else if (frame_id_ != pose_msg->header.frame_id) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "pose frame_id '%s' does not match current frame_id '%s'. Topic is ignored.",
+        pose_msg->header.frame_id.c_str(), frame_id_.c_str());
+      return;
+    }
+  
+    // set position_vec_ and direction_vec_
+    tf2::fromMsg(pose_msg->pose.position, position_vec_);
+    tf2::Quaternion quat;
+    tf2::fromMsg(pose_msg->pose.orientation, quat);
+    direction_vec_ = tf2::Matrix3x3(quat) * tf2::Vector3(1.0, 0.0, 0.0);
+
+    // publish cmd_vel
+    if (target_point_received_) {
+      this->publish_cmd_vel();
+    }
   }
 
   void update_target_point(const PointMsg::ConstSharedPtr & target_point_msg)
   {
-    this->set_target_point(target_point_msg);
+    // check frame_id
+    if (frame_id_.empty()) {
+      return;
+    }
+
+    if (target_point_msg->header.frame_id != frame_id_) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "target_point frame_id '%s' does not match current frame_id '%s'. Topic is ignored.",
+        target_point_msg->header.frame_id.c_str(), frame_id_.c_str());
+      return;
+    }
+  
+    // set target_point_vec_
+    tf2::fromMsg(target_point_msg->point, target_point_vec_);
+
+    // publish cmd_vel
     this->publish_cmd_vel();
   }
 
@@ -218,21 +157,9 @@ private:
   std::string frame_id_;
   double cmd_vel_distance_rate_;
 
-  // initialized flag
-  enum class InitializedFlag
-  {
-    kNone = 0,
-    kPose = 1 << 0,
-    kTargetPoint = 1 << 1,
-    kAll = kPose | kTargetPoint,
-  } initialized_flag_;
-
   // pose & target point
   tf2::Vector3 position_vec_, direction_vec_, target_point_vec_;
-
-  // tf2
-  tf2_ros::Buffer tf_buffer_;
-  tf2_ros::TransformListener tf_listener_;
+  bool target_point_received_;
 
   // publisher
   rclcpp::Publisher<TwistStampedMsg>::SharedPtr cmd_vel_stamped_pub_;

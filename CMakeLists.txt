@@ -61,9 +61,6 @@ rclcpp_components_register_node(${PROJECT_NAME}_lib
   PLUGIN "${PROJECT_NAMESPACE}::ros2::CmdVelLimiterNode"
   EXECUTABLE "cmd_vel_limiter_node")
 rclcpp_components_register_node(${PROJECT_NAME}_lib
-  PLUGIN "${PROJECT_NAMESPACE}::ros2::CmdVelTransformerNode"
-  EXECUTABLE "cmd_vel_transformer_node")
-rclcpp_components_register_node(${PROJECT_NAME}_lib
   PLUGIN "${PROJECT_NAMESPACE}::ros2::LocalPlannerNode"
   EXECUTABLE "local_planner_node")
 rclcpp_components_register_node(${PROJECT_NAME}_lib
