@@ -15,9 +15,11 @@
 #ifndef D2__CONTROLLER__ROS2__PURE_PURSUIT_NODE_HPP_
 #define D2__CONTROLLER__ROS2__PURE_PURSUIT_NODE_HPP_
 
+#include <map>
 #include <memory>
 #include <string>
-#include <variant>
+#include <utility>
+#include <vector>
 
 #include "d2/controller/pure_pursuit.hpp"
 #include "d2/controller/stamped.hpp"

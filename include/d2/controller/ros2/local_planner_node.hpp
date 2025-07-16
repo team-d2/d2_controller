@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef D2__CONTROLLER__ROS2__LOCAL_PLANNER_HPP_
-#define D2__CONTROLLER__ROS2__LOCAL_PLANNER_HPP_
+#ifndef D2__CONTROLLER__ROS2__LOCAL_PLANNER_NODE_HPP_
+#define D2__CONTROLLER__ROS2__LOCAL_PLANNER_NODE_HPP_
+
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "d2/controller/local_planner.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
@@ -224,4 +230,4 @@ private:
 
 }  // namespace d2::controller::ros2
 
-#endif  // D2__CONTROLLER__ROS2__LOCAL_PLANNER_HPP_
+#endif  // D2__CONTROLLER__ROS2__LOCAL_PLANNER_NODE_HPP_

@@ -5,7 +5,7 @@ set(PROJECT_DIR d2/controller)
 set(PROJECT_NAMESPACE d2::controller)
 
 # find package
-if ("$ENV{ROS_VERSION}" STREQUAL "2")
+if("$ENV{ROS_VERSION}" STREQUAL "2")
   find_package(ament_cmake_auto REQUIRED)
   ament_auto_find_build_dependencies()
 else()
@@ -30,7 +30,7 @@ endif()
 # create library
 list(LENGTH ${PROJECT_NAME}_src_files src_files_count)
 if(src_files_count GREATER 0)
-  if ("$ENV{ROS_VERSION}" STREQUAL "2")
+  if("$ENV{ROS_VERSION}" STREQUAL "2")
     # ROS2 library
     ament_auto_add_library(${PROJECT_NAME}_lib SHARED "${${PROJECT_NAME}_src_files}")
   else()
@@ -56,7 +56,7 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}/)
 
 # register components(ROS2)
-if ("$ENV{ROS_VERSION}" STREQUAL "2")
+if("$ENV{ROS_VERSION}" STREQUAL "2")
 rclcpp_components_register_node(${PROJECT_NAME}_lib
   PLUGIN "${PROJECT_NAMESPACE}::ros2::CmdVelLimiterNode"
   EXECUTABLE "cmd_vel_limiter_node")
@@ -76,13 +76,13 @@ endif()
 
 # test
 if(BUILD_TESTING)
-  if ("$ENV{ROS_VERSION}" STREQUAL "2")
+  if("$ENV{ROS_VERSION}" STREQUAL "2")
     ament_auto_find_test_dependencies()
     ament_lint_auto_find_test_dependencies()
   endif()
 endif()
 
 # package(ROS2)
-if ("$ENV{ROS_VERSION}" STREQUAL "2")
+if("$ENV{ROS_VERSION}" STREQUAL "2")
   ament_auto_package()
 endif()

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef D2__CONTROLLER__CSV_SAVER_HPP_
-#define D2__CONTROLLER__CSV_SAVER_HPP_
+#ifndef D2__CONTROLLER__PURE_PURSUIT_HPP_
+#define D2__CONTROLLER__PURE_PURSUIT_HPP_
 
 #include <optional>
 
@@ -49,4 +49,4 @@ constexpr std::optional<Vector3> create_pure_pursuit_point(
 
 }  // namespace d2::controller
 
-#endif  // D2__CONTROLLER__CSV_SAVER_HPP_
+#endif  // D2__CONTROLLER__PURE_PURSUIT_HPP_
