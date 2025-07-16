@@ -1,4 +1,24 @@
 /**:
   ros__parameters:
     default_frame_id: "map"
+    base_footprint_frame_id: "base_footprint"
     lookahead_distance: 1.0
+    vel_limit:
+      linear:
+        x: 1.0
+        y: 0.0
+        z: 0.0
+      angular:
+        x: 0.0
+        y: 0.0
+        z: 1.0
+    accel_limit:
+      linear:
+        x: 2.0
+        y: 0.0
+        z: 0.0
+      angular:
+        x: 0.0
+        y: 0.0
+        z: 2.0
+    cmd_vel_timeout: 1.0
