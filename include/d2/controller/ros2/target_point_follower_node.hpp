@@ -56,7 +56,9 @@ public:
     pose_frame_id_(this->declare_parameter<std::string>("pose_frame_id", "base_link")),
     cmd_vel_distance_rate_(this->declare_parameter<double>("cmd_vel_distance_rate", 0.2)),
     position_vec_(),
-    direction_vec_(),
+    direction_x_vec_(),
+    direction_y_vec_(),
+    direction_z_vec_(),
     target_point_vec_(),
     target_point_received_(false),
     cmd_vel_pub_(this->create_publisher<TwistMsg>("cmd_vel", 10)),
@@ -91,17 +93,22 @@ private:
   {
     // clculate cmd_vel
     const auto vec = target_point_vec_ - position_vec_;
-    const auto rot_vec = direction_vec_.cross(vec);
+    const auto rot_vec = direction_x_vec_.cross(vec);
     const auto rot_length = rot_vec.length();
-    const auto dot = direction_vec_.dot(vec);
+    const auto rot_length_inv = 1.0 / rot_length;
+    const auto dot = direction_x_vec_.dot(vec);
     const auto angle = std::atan2(rot_length, dot);
-    const auto linear_speed = direction_vec_.length() * vec.length2() * angle / rot_length * cmd_vel_distance_rate_;
+    const auto distance = rot_length != 0 ? direction_x_vec_.length() * vec.length2() / rot_length * angle : vec.length();
+    const auto linear_speed = distance * cmd_vel_distance_rate_;
     const auto angular_speed = angle * cmd_vel_distance_rate_;
+    const auto angular_vel_y = direction_y_vec_.dot(rot_vec) * rot_length_inv * angular_speed;
+    const auto angular_vel_z = direction_z_vec_.dot(rot_vec) * rot_length_inv * angular_speed;
 
     // publish cmd_vel
     auto cmd_vel_msg = std::make_unique<TwistMsg>();
     cmd_vel_msg->linear.x = linear_speed;
-    cmd_vel_msg->angular.z = angular_speed;
+    cmd_vel_msg->angular.y = angular_vel_y;
+    cmd_vel_msg->angular.z = angular_vel_z;
     cmd_vel_pub_->publish(std::move(cmd_vel_msg));
 
     // publish cmd_vel_stamped
@@ -110,7 +117,8 @@ private:
       cmd_vel_stamped_msg->header.stamp = stamp;
       cmd_vel_stamped_msg->header.frame_id = pose_frame_id_;
       cmd_vel_stamped_msg->twist.linear.x = linear_speed;
-      cmd_vel_stamped_msg->twist.angular.z = angular_speed;
+      cmd_vel_stamped_msg->twist.angular.y = angular_vel_y;
+      cmd_vel_stamped_msg->twist.angular.z = angular_vel_z;
       cmd_vel_stamped_pub_->publish(std::move(cmd_vel_stamped_msg));
     }
   }
@@ -128,11 +136,14 @@ private:
       return;
     }
   
-    // set position_vec_ and direction_vec_
+    // set position_vec_ and direction vecs
     tf2::fromMsg(pose_msg->pose.position, position_vec_);
     tf2::Quaternion quat;
     tf2::fromMsg(pose_msg->pose.orientation, quat);
-    direction_vec_ = tf2::Matrix3x3(quat) * tf2::Vector3(1.0, 0.0, 0.0);
+    const auto rotation_mat = tf2::Matrix3x3(quat);
+    direction_x_vec_ = rotation_mat.getRow(0);
+    direction_y_vec_ = rotation_mat.getRow(1);
+    direction_z_vec_ = rotation_mat.getRow(2);
 
     // publish cmd_vel
     if (target_point_received_) {
@@ -167,7 +178,7 @@ private:
   double cmd_vel_distance_rate_;
 
   // pose & target point
-  tf2::Vector3 position_vec_, direction_vec_, target_point_vec_;
+  tf2::Vector3 position_vec_, direction_x_vec_, direction_y_vec_, direction_z_vec_, target_point_vec_;
   bool target_point_received_;
 
   // publisher
