@@ -62,7 +62,9 @@ public:
     target_point_vec_(),
     target_point_received_(false),
     cmd_vel_pub_(this->create_publisher<TwistMsg>("cmd_vel", 10)),
-    cmd_vel_stamped_pub_(!pose_frame_id_.empty() ? this->create_publisher<TwistStampedMsg>("cmd_vel/stamped", 10) : nullptr),
+    cmd_vel_stamped_pub_(
+      !pose_frame_id_.empty() ? this->create_publisher<TwistStampedMsg>("cmd_vel/stamped", 10) :
+      nullptr),
     pose_sub_(this->create_subscription<PoseMsg>(
         "pose", 10, [this](PoseMsg::ConstSharedPtr msg) {this->update_pose(std::move(msg));})),
     target_point_sub_(
@@ -98,7 +100,9 @@ private:
     const auto rot_length_inv = 1.0 / rot_length;
     const auto dot = direction_x_vec_.dot(vec);
     const auto angle = std::atan2(rot_length, dot);
-    const auto distance = rot_length != 0 ? direction_x_vec_.length() * vec.length2() / rot_length * angle : vec.length();
+    const auto distance = rot_length != 0 ?
+      direction_x_vec_.length() * vec.length2() / rot_length * angle :
+      vec.length();
     const auto linear_speed = distance * cmd_vel_distance_rate_;
     const auto angular_speed = angle * cmd_vel_distance_rate_;
     const auto angular_vel_y = direction_y_vec_.dot(rot_vec) * rot_length_inv * angular_speed;
@@ -135,7 +139,7 @@ private:
         pose_msg->header.frame_id.c_str(), frame_id_.c_str());
       return;
     }
-  
+
     // set position_vec_ and direction vecs
     tf2::fromMsg(pose_msg->pose.position, position_vec_);
     tf2::Quaternion quat;
@@ -165,7 +169,7 @@ private:
         target_point_msg->header.frame_id.c_str(), frame_id_.c_str());
       return;
     }
-  
+
     // set target_point_vec_
     tf2::fromMsg(target_point_msg->point, target_point_vec_);
 
@@ -178,7 +182,8 @@ private:
   double cmd_vel_distance_rate_;
 
   // pose & target point
-  tf2::Vector3 position_vec_, direction_x_vec_, direction_y_vec_, direction_z_vec_, target_point_vec_;
+  tf2::Vector3 position_vec_, direction_x_vec_, direction_y_vec_, direction_z_vec_,
+    target_point_vec_;
   bool target_point_received_;
 
   // publisher

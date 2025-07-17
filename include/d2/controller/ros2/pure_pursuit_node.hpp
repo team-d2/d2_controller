@@ -77,8 +77,10 @@ private:
   {
     // check frame_id
     for (const auto & pose_msg_data : local_plan_msg->poses) {
-      if (!pose_msg_data.header.frame_id.empty() && 
-          pose_msg_data.header.frame_id != local_plan_msg->header.frame_id) {
+      if (
+        !pose_msg_data.header.frame_id.empty() &&
+        pose_msg_data.header.frame_id != local_plan_msg->header.frame_id)
+      {
         RCLCPP_WARN(
           this->get_logger(),
           "global_plan pose frame_id '%s' does not match global_plan frame_id '%s'. "

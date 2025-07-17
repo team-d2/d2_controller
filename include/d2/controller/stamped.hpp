@@ -25,6 +25,6 @@ struct Stamped
   Data data;
 };
 
-}   // namespace d2::controller
+}  // namespace d2::controller
 
 #endif  // D2__CONTROLLER__STAMPED_HPP_

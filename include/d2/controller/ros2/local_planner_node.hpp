@@ -154,8 +154,7 @@ private:
     // get pose tf
     if (frame_id_.empty()) {
       frame_id_ = pose_msg->header.frame_id;
-    }
-    else if (frame_id_ != pose_msg->header.frame_id) {
+    } else if (frame_id_ != pose_msg->header.frame_id) {
       RCLCPP_WARN(
         this->get_logger(),
         "pose frame_id '%s' does not match current frame_id '%s'. "
