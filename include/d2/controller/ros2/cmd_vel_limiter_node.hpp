@@ -100,37 +100,64 @@ public:
   }
 
 private:
-  static tf2::Vector3 limit_vel_vec(
-    const tf2::Vector3 & cmd_vel_nav_vec, const tf2::Vector3 & vel_limit_vec)
+  static std::tuple<tf2::Vector3, tf2::Vector3> limit_vel_vec(
+    const std::tuple<tf2::Vector3, tf2::Vector3> & cmd_vel_nav_vec_tuple,
+    const std::tuple<tf2::Vector3, tf2::Vector3> & vel_limit_vec_tuple)
   {
-    const auto vnx2 = vel_limit_vec.x() * vel_limit_vec.x();
-    const auto vny2 = vel_limit_vec.y() * vel_limit_vec.y();
-    const auto vnz2 = vel_limit_vec.z() * vel_limit_vec.z();
-    const auto lx2 = cmd_vel_nav_vec.x() * cmd_vel_nav_vec.x();
-    const auto ly2 = cmd_vel_nav_vec.y() * cmd_vel_nav_vec.y();
-    const auto lz2 = cmd_vel_nav_vec.z() * cmd_vel_nav_vec.z();
-    const auto xrate2 = vnx2 == 0 ? 0.0 : vnx2 / lx2;
-    const auto yrate2 = vny2 == 0 ? 0.0 : vny2 / ly2;
-    const auto zrate2 = vnz2 == 0 ? 0.0 : vnz2 / lz2;
-    const auto rate2 = xrate2 + yrate2 + zrate2;
+    const auto & [cmd_vel_nav_linear_vec, cmd_vel_nav_angular_vec] = cmd_vel_nav_vec_tuple;
+    const auto & [vel_limit_linear_vec, vel_limit_angular_vec] = vel_limit_vec_tuple;
+    const auto llx2 = vel_limit_linear_vec.x() * vel_limit_linear_vec.x();
+    const auto lly2 = vel_limit_linear_vec.y() * vel_limit_linear_vec.y();
+    const auto llz2 = vel_limit_linear_vec.z() * vel_limit_linear_vec.z();
+    const auto lax2 = vel_limit_angular_vec.x() * vel_limit_angular_vec.x();
+    const auto lay2 = vel_limit_angular_vec.y() * vel_limit_angular_vec.y();
+    const auto laz2 = vel_limit_angular_vec.z() * vel_limit_angular_vec.z();
+    const auto vnlx2 = cmd_vel_nav_linear_vec.x() * cmd_vel_nav_linear_vec.x();
+    const auto vnly2 = cmd_vel_nav_linear_vec.y() * cmd_vel_nav_linear_vec.y();
+    const auto vnlz2 = cmd_vel_nav_linear_vec.z() * cmd_vel_nav_linear_vec.z();
+    const auto vnax2 = cmd_vel_nav_angular_vec.x() * cmd_vel_nav_angular_vec.x();
+    const auto vnay2 = cmd_vel_nav_angular_vec.y() * cmd_vel_nav_angular_vec.y();
+    const auto vnaz2 = cmd_vel_nav_angular_vec.z() * cmd_vel_nav_angular_vec.z();
+    const auto lxrate2 = vnlx2 == 0 ? 0.0 : vnlx2 / llx2;
+    const auto lyrate2 = vnly2 == 0 ? 0.0 : vnly2 / lly2;
+    const auto lzrate2 = vnlz2 == 0 ? 0.0 : vnlz2 / llz2;
+    const auto axrate2 = vnax2 == 0 ? 0.0 : vnax2 / lax2;
+    const auto ayrate2 = vnay2 == 0 ? 0.0 : vnay2 / lay2;
+    const auto azrate2 = vnaz2 == 0 ? 0.0 : vnaz2 / laz2;
+    const auto rate2 = lxrate2 + lyrate2 + lzrate2 + axrate2 + ayrate2 + azrate2;
+    const auto rate_inv_minimized = rate2 > 1.0 ? 1.0 / std::sqrt(rate2) : 1.0;
 
-    return rate2 > 1.0 ? cmd_vel_nav_vec : cmd_vel_nav_vec / std::sqrt(rate2);
+    return {
+      cmd_vel_nav_linear_vec * rate_inv_minimized, cmd_vel_nav_angular_vec * rate_inv_minimized};
   }
 
-  static tf2::Vector3 limit_vel_vec(
-    const tf2::Vector3 & cmd_vel_nav_vec, const tf2::Vector3 & vel_limit_vec,
-    const tf2::Vector3 & accel_limit_vec, const double duration, const tf2::Vector3 & vel_last)
+  static std::tuple<tf2::Vector3, tf2::Vector3> limit_vel_vec(
+    const std::tuple<tf2::Vector3, tf2::Vector3> & cmd_vel_nav_vec_tuple,
+    const std::tuple<tf2::Vector3, tf2::Vector3> & vel_limit_vec_tuple,
+    const std::tuple<tf2::Vector3, tf2::Vector3> & accel_limit_vec_tuple, const double duration,
+    const std::tuple<tf2::Vector3, tf2::Vector3> & vel_last_vec_tuple)
   {
     // limit vel
-    const auto cmd_vel_vel_limited_vec = limit_vel_vec(cmd_vel_nav_vec, vel_limit_vec);
+    const auto [cmd_vel_vel_limited_linear_vec, cmd_vel_vel_angular_linear_vec] =
+      limit_vel_vec(cmd_vel_nav_vec_tuple, vel_limit_vec_tuple);
 
     // limit accel
-    const auto vel_delta_limit_vec = accel_limit_vec * duration;
-    const auto vel_delta_vel_limited_vec = cmd_vel_vel_limited_vec - vel_last;
-    const auto vel_delta_accel_limited_vec =
-      limit_vel_vec(vel_delta_vel_limited_vec, vel_delta_limit_vec);
+    const auto & [accel_limit_linear_vec, accel_limit_angular_vec] = accel_limit_vec_tuple;
+    const auto & [vel_last_linear_vec, vel_last_angular_vec] = vel_last_vec_tuple;
+    const auto vel_delta_limit_linear_vec = accel_limit_linear_vec * duration;
+    const auto vel_delta_limit_angular_vec = accel_limit_angular_vec * duration;
+    const auto vel_delta_vel_limited_linear_vec =
+      cmd_vel_vel_limited_linear_vec - vel_last_linear_vec;
+    const auto vel_delta_vel_limited_angular_vec =
+      cmd_vel_vel_angular_linear_vec - vel_last_angular_vec;
+    const auto [vel_delta_accel_limited_linear_vec, vel_delta_accel_limited_angular_vec] =
+      limit_vel_vec(
+      {vel_delta_vel_limited_linear_vec, vel_delta_vel_limited_angular_vec},
+      {vel_delta_limit_linear_vec, vel_delta_limit_angular_vec});
 
-    return vel_last + vel_delta_accel_limited_vec;
+    return {
+      vel_last_linear_vec + vel_delta_accel_limited_linear_vec,
+      vel_last_angular_vec + vel_delta_accel_limited_angular_vec};
   }
 
   void limit_cmd_vel(TwistMsg::ConstSharedPtr cmd_vel_nav_msg)
@@ -145,12 +172,11 @@ private:
     tf2::fromMsg(cmd_vel_nav_msg->angular, cmd_vel_nav_angular_vec);
 
     // limit velocity
-    const auto limited_linear_vec = limit_vel_vec(
-      cmd_vel_nav_linear_vec, vel_limit_linear_vec_, accel_limit_linear_vec_, duration,
-      last_vel_linear_vec_);
-    const auto limited_angular_vec = limit_vel_vec(
-      cmd_vel_nav_angular_vec, vel_limit_angular_vec_, accel_limit_angular_vec_, duration,
-      last_vel_angular_vec_);
+    const auto [limited_linear_vec, limited_angular_vec] = limit_vel_vec(
+      {cmd_vel_nav_linear_vec, cmd_vel_nav_angular_vec},
+      {vel_limit_linear_vec_, vel_limit_angular_vec_},
+      {accel_limit_linear_vec_, accel_limit_angular_vec_}, duration,
+      {last_vel_linear_vec_, last_vel_angular_vec_});
 
     // publish limited cmd_vel
     auto cmd_vel_msg = std::make_unique<TwistMsg>();
