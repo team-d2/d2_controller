@@ -81,5 +81,5 @@ endif()
 
 # package(ROS2)
 if("$ENV{ROS_VERSION}" STREQUAL "2")
-  ament_auto_package()
+  ament_auto_package(USE_SCOPED_HEADER_INSTALL_DIR)
 endif()
