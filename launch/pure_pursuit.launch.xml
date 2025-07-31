@@ -17,6 +17,7 @@
   <arg name="controller_name" default="d2_controller"/>
   <arg name="pose_topic_name" default="$(var namespace)/pose"/>
   <arg name="global_plan_topic_name" default="$(var namespace)/global_plan"/>
+  <arg name="lidar_points_topic_name" default="$(var namespace)/lidar/points"/>
   <arg name="vel_limit_topic_name" default="$(var namespace)/vel_limit"/>
   <arg name="accel_limit_topic_name" default="$(var namespace)/accel_limit"/>
   <arg name="cmd_vel_topic_name" default="$(var namespace)/cmd_vel"/>
@@ -63,9 +64,20 @@
     </composable_node>
     <composable_node
         pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::ObstaceleStopperNode"
+        name="obstacle_stopper">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="lidar/points" to="$(var lidar_points_topic_name)"/>
+      <remap from="/tf" to="$(var tf_topic_name)"/>
+      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+    <composable_node
+        pkg="$(var project_name)"
         plugin="$(var project_namespace)::ros2::PurePursuitNode"
         name="pure_pursuit">
       <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="local_plan" to="local_plan_clipped_by_obstacle"/>
       <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
@@ -162,10 +174,21 @@
     </node>
     <node
         pkg="$(var project_name)"
+        exec="obstacle_stopper_node"
+        name="obstacle_stopper"
+        output="screen">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="lidar/points" to="$(var lidar_points_topic_name)"/>
+      <remap from="/tf" to="$(var tf_topic_name)"/>
+      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+    </node>
+    <node
+        pkg="$(var project_name)"
         exec="pure_pursuit_node"
         name="pure_pursuit"
         output="screen">
       <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="local_plan" to="local_plan_clipped_by_obstacle"/>
       <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
     </node>

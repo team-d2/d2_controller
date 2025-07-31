@@ -69,6 +69,9 @@ rclcpp_components_register_node(${PROJECT_NAME}_lib
 rclcpp_components_register_node(${PROJECT_NAME}_lib
   PLUGIN "${PROJECT_NAMESPACE}::ros2::TargetPointFollowerNode"
   EXECUTABLE "target_point_follower_node")
+rclcpp_components_register_node(${PROJECT_NAME}_lib
+  PLUGIN "${PROJECT_NAMESPACE}::ros2::ObstaceleStopperNode"
+  EXECUTABLE "obstacle_stopper_node")
 endif()
 
 # test
