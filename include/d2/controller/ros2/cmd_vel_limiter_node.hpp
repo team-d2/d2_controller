@@ -159,6 +159,8 @@ private:
     return {
       vel_last_linear_vec + vel_delta_accel_limited_linear_vec,
       vel_last_angular_vec + vel_delta_accel_limited_angular_vec};
+
+    tf2::Matrix3x3 mat;
   }
 
   void limit_cmd_vel(TwistMsg::ConstSharedPtr cmd_vel_nav_msg)

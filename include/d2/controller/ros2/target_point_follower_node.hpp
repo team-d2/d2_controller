@@ -145,9 +145,9 @@ private:
     tf2::Quaternion quat;
     tf2::fromMsg(pose_msg->pose.orientation, quat);
     const auto rotation_mat = tf2::Matrix3x3(quat);
-    direction_x_vec_ = rotation_mat.getRow(0);
-    direction_y_vec_ = rotation_mat.getRow(1);
-    direction_z_vec_ = rotation_mat.getRow(2);
+    direction_x_vec_ = rotation_mat.getColumn(0);
+    direction_y_vec_ = rotation_mat.getColumn(1);
+    direction_z_vec_ = rotation_mat.getColumn(2);
 
     // publish cmd_vel
     if (target_point_received_) {
