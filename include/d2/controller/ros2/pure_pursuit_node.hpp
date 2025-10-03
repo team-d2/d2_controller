@@ -19,18 +19,13 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
-#include "d2/controller/pure_pursuit.hpp"
-#include "d2/controller/stamped.hpp"
-#include "d2/controller/vector3.hpp"
-#include "geometry_msgs/msg/point_stamped.hpp"
-#include "nav_msgs/msg/path.hpp"
-#include "rclcpp/rclcpp.hpp"
-#include "tf2/LinearMath/Transform.hpp"
-#include "tf2/LinearMath/Vector3.hpp"
-#include "tf2/convert.hpp"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "d2/controller/calculate_forrow_point_vel.hpp"
+#include "d2/controller/calculate_lookahead_point.hpp"
+#include "d2/controller/ros2/adapter/path.hpp"
+#include "d2/controller/ros2/adapter/point_stamped.hpp"
+#include "d2/controller/ros2/adapter/twist.hpp"
+#include "rclcpp/node.hpp"
 #include "visibility.hpp"
 
 namespace d2::controller::ros2
@@ -38,22 +33,25 @@ namespace d2::controller::ros2
 
 class PurePursuitNode : public rclcpp::Node
 {
-  using PointMsg = geometry_msgs::msg::PointStamped;
-  using PathMsg = nav_msgs::msg::Path;
-  using TfMsg = geometry_msgs::msg::TransformStamped;
+  using Path = adapter::Path::custom_type;
+  using PointStamped = adapter::PointStamped::custom_type;
+  using Twist = adapter::Twist::custom_type;
 
 public:
-  static constexpr auto kDefaultNodeName = "d2_pure_pursuit";
+  static constexpr auto kDefaultNodeName = "pure_pursuit";
 
   D2__CONTROLLER__ROS2_PUBLIC
   inline PurePursuitNode(
     const std::string & node_name, const std::string node_namespace,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : rclcpp::Node(node_name, node_namespace, options),
-    lookahead_distance_(this->declare_parameter<double>("lookahead_distance", 1.0)),
-    target_point_pub_(this->create_publisher<PointMsg>("target_point", 10)),
-    local_plan_sub_(this->create_subscription<PathMsg>(
-        "local_plan", 10, [this](PathMsg::ConstSharedPtr msg) {this->run(std::move(msg));}))
+    lookahead_distance_(this->declare_parameter<double>("purepursuit.lookahead_distance", 1.0)),
+    follow_point_param_{
+      this->declare_parameter<double>("follow_point.margin_distance", 1.0),
+      this->declare_parameter<double>("follow_point.vel_per_distance", 1.0)},
+    cmd_vel_pub_(this->create_cmd_vel_publisher()),
+    target_point_pub_(this->create_target_point_publisher()),
+    local_plan_sub_(this->create_local_plan_subscription())
   {
   }
 
@@ -73,62 +71,69 @@ public:
   ~PurePursuitNode() override {}
 
 private:
-  void run(const PathMsg::ConstSharedPtr & local_plan_msg)
+  inline rclcpp::Publisher<adapter::Twist>::SharedPtr create_cmd_vel_publisher()
   {
-    // check frame_id
-    for (const auto & pose_msg_data : local_plan_msg->poses) {
-      if (
-        !pose_msg_data.header.frame_id.empty() &&
-        pose_msg_data.header.frame_id != local_plan_msg->header.frame_id)
-      {
-        RCLCPP_WARN(
-          this->get_logger(),
-          "global_plan pose frame_id '%s' does not match global_plan frame_id '%s'. "
-          "Topic is ignored.",
-          pose_msg_data.header.frame_id.c_str(), local_plan_msg->header.frame_id.c_str());
-        return;
-      }
-    }
+    rclcpp::PublisherOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    return this->create_publisher<adapter::Twist>("cmd_vel", rclcpp::QoS(10).best_effort(), options);
+  }
 
-    // create path
-    std::vector<Stamped<Vector3>> path;
-    path.reserve(local_plan_msg->poses.size());
-    for (const auto & pose_msg_data : local_plan_msg->poses) {
-      Stamped<Vector3> point_stamped;
-      point_stamped.stamp_nanosec =
-        static_cast<std::uint64_t>(pose_msg_data.header.stamp.sec * 1e9) +
-        pose_msg_data.header.stamp.nanosec;
-      point_stamped.data.x = pose_msg_data.pose.position.x;
-      point_stamped.data.y = pose_msg_data.pose.position.y;
-      point_stamped.data.z = pose_msg_data.pose.position.z;
-      path.push_back(point_stamped);
-    }
+  inline rclcpp::Publisher<adapter::PointStamped>::SharedPtr create_target_point_publisher()
+  {
+    rclcpp::PublisherOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    return this->create_publisher<adapter::PointStamped>("target_point", rclcpp::QoS(10).best_effort(), options);
+  }
+  
+  inline rclcpp::Subscription<adapter::Path>::SharedPtr create_local_plan_subscription()
+  {
+    rclcpp::SubscriptionOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth, rclcpp::QosPolicyKind::Durability,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    return this->create_subscription<adapter::Path>(
+      "local_plan", rclcpp::QoS(10).transient_local(),
+      [this](std::shared_ptr<const Path> path) {this->calculate(std::move(path));}, options);
+  }
 
-    // create purpursuit point
-    auto target_point_opt = create_pure_pursuit_point(path, lookahead_distance_);
-    if (!target_point_opt.has_value()) {
-      RCLCPP_WARN_ONCE(this->get_logger(), "No target point found in the local plan.");
-      return;
-    }
+  void calculate(std::shared_ptr<const Path> path)
+  {
+    // calcurate the target point
+    auto point_stamped = std::make_unique<PointStamped>();
+    point_stamped->frame_id = path->frame_id;
+    point_stamped->data = calculate_lookahead_point(path->data.data, lookahead_distance_);
 
-    // publish the target point
-    auto target_point_msg = std::make_unique<PointMsg>();
-    target_point_msg->header.frame_id = local_plan_msg->header.frame_id;
-    target_point_msg->header.stamp = local_plan_msg->header.stamp;
-    target_point_msg->point.x = target_point_opt->x;
-    target_point_msg->point.y = target_point_opt->y;
-    target_point_msg->point.z = target_point_opt->z;
-    target_point_pub_->publish(std::move(target_point_msg));
+    // calcurate cmd_vel
+    auto cmd_vel = std::make_unique<Twist>();
+    *cmd_vel = calculate_forrow_point_vel(
+      point_stamped->data.data, path->data.data.front().data,
+      follow_point_param_);
+    
+    // publish cmd_vel
+    cmd_vel_pub_->publish(std::move(cmd_vel));
+    
+    // publish target point
+    target_point_pub_->publish(std::move(point_stamped));
   }
 
   // parameter
   double lookahead_distance_;
+  FollowPointParam follow_point_param_;
 
   // publisher
-  rclcpp::Publisher<PointMsg>::SharedPtr target_point_pub_;
+  rclcpp::Publisher<adapter::Twist>::SharedPtr cmd_vel_pub_;
+  rclcpp::Publisher<adapter::PointStamped>::SharedPtr target_point_pub_;
 
   // subscriptions
-  rclcpp::Subscription<PathMsg>::SharedPtr local_plan_sub_;
+  rclcpp::Subscription<adapter::Path>::SharedPtr local_plan_sub_;
 };
 
 }  // namespace d2::controller::ros2

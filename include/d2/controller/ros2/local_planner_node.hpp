@@ -21,14 +21,10 @@
 #include <utility>
 #include <vector>
 
-#include "d2/controller/local_planner.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
-#include "nav_msgs/msg/path.hpp"
 #include "rclcpp/node.hpp"
-#include "tf2/LinearMath/Transform.hpp"
-#include "tf2/LinearMath/Vector3.hpp"
-#include "tf2/convert.hpp"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "d2/controller/calculate_local_plan.hpp"
+#include "d2/controller/ros2/adapter/path.hpp"
+#include "d2/controller/ros2/adapter/pose_with_covariance_stamped.hpp"
 #include "visibility.hpp"
 
 namespace d2::controller::ros2
@@ -36,12 +32,13 @@ namespace d2::controller::ros2
 
 class LocalPlannerNode : public rclcpp::Node
 {
+  using Path = adapter::Path::custom_type;
+  using PoseWithCovarianceStamped = adapter::PoseWithCovarianceStamped::custom_type;
   using PathMsg = nav_msgs::msg::Path;
   using PoseMsg = geometry_msgs::msg::PoseStamped;
-  using TfMsg = geometry_msgs::msg::TransformStamped;
 
 public:
-  static constexpr auto kDefaultNodeName = "d2_local_planner";
+  static constexpr auto kDefaultNodeName = "local_planner";
 
   D2__CONTROLLER__ROS2_PUBLIC
   inline LocalPlannerNode(
@@ -50,14 +47,10 @@ public:
   : rclcpp::Node(node_name, node_namespace, options),
     frame_id_(),
     global_plan_(),
-    pose_opt_(std::nullopt),
-    local_plan_pub_(this->create_publisher<PathMsg>("local_plan", 10)),
-    global_plan_sub_(this->create_subscription<PathMsg>(
-        "global_plan", 10,
-        [this](PathMsg::SharedPtr msg) {this->update_global_plan(std::move(msg));})),
-    pose_sub_(
-      this->create_subscription<PoseMsg>(
-        "pose", 10, [this](PoseMsg::SharedPtr msg) {this->update_pose(std::move(msg));}))
+    pose_(),
+    local_plan_pub_(this->create_local_plan_publisher()),
+    global_plan_sub_(this->create_global_plan_subscription()),
+    pose_sub_(this->create_pose_subscription())
   {
   }
 
@@ -77,118 +70,119 @@ public:
   ~LocalPlannerNode() override {}
 
 private:
-  void publish_local_plan()
+  inline rclcpp::Publisher<adapter::Path>::SharedPtr create_local_plan_publisher()
   {
-    if (!pose_opt_) {
-      return;
-    }
-    const auto & pose = pose_opt_.value();
-
-    const auto local_plan = create_local_plan(global_plan_, pose);
-    auto local_plan_msg = std::make_unique<PathMsg>();
-    local_plan_msg->header.stamp = rclcpp::Time(pose.stamp_nanosec);
-    local_plan_msg->header.frame_id = frame_id_;
-    local_plan_msg->poses.reserve(local_plan.size());
-    for (const auto & point_stamped : local_plan) {
-      auto pose_msg = PoseMsg(rosidl_runtime_cpp::MessageInitialization::SKIP);
-      pose_msg.header.stamp = rclcpp::Time(point_stamped.stamp_nanosec);
-      pose_msg.header.frame_id = "";
-      pose_msg.pose.position.x = point_stamped.data.x;
-      pose_msg.pose.position.y = point_stamped.data.y;
-      pose_msg.pose.position.z = point_stamped.data.z;
-      pose_msg.pose.orientation.x = 0.0;  // Default orientation
-      pose_msg.pose.orientation.y = 0.0;  // Default orientation
-      pose_msg.pose.orientation.z = 0.0;  // Default orientation
-      pose_msg.pose.orientation.w = 1.0;  // Default orientation
-      local_plan_msg->poses.push_back(pose_msg);
-    }
-    local_plan_pub_->publish(std::move(local_plan_msg));
+    rclcpp::PublisherOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth, rclcpp::QosPolicyKind::Durability,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    return this->create_publisher<adapter::Path>("local_plan", rclcpp::QoS(10).transient_local(), options);
   }
 
-  void update_global_plan(const PathMsg::SharedPtr & global_plan_msg)
+  inline rclcpp::Subscription<adapter::Path>::SharedPtr create_global_plan_subscription()
+  {
+    rclcpp::SubscriptionOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth, rclcpp::QosPolicyKind::Durability,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    return this->create_subscription<adapter::Path>(
+      "global_plan", rclcpp::QoS(10).transient_local(),
+      [this](std::shared_ptr<const Path> path) {this->update_global_plan(std::move(path));}, options);
+  }
+
+  inline rclcpp::Subscription<adapter::PoseWithCovarianceStamped>::SharedPtr create_pose_subscription()
+  {
+    rclcpp::SubscriptionOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    return this->create_subscription<adapter::PoseWithCovarianceStamped>(
+      "pose", rclcpp::QoS(10).best_effort(),
+      [this](std::shared_ptr<const PoseWithCovarianceStamped> path) {this->update_pose(std::move(path));}, options);
+  }
+
+  void publish_local_plan(std::uint64_t stamp_nanosec)
+  {
+    const auto pose_without_cov = Stamped<Eigen::Isometry3d>{
+      pose_->data.stamp_nanosec, pose_->data.data.data};
+    auto local_plan = std::make_unique<Path>();
+    local_plan->frame_id = frame_id_;
+    local_plan->data.stamp_nanosec = stamp_nanosec;
+    local_plan->data.data = calculate_local_plan(global_plan_->data.data, pose_without_cov);
+    local_plan_pub_->publish(std::move(local_plan));
+  }
+
+  void update_global_plan(std::shared_ptr<const Path> global_plan)
   {
     // check frame_id
-    if (frame_id_.empty()) {
-      return;
-    }
-
-    if (global_plan_msg->header.frame_id != frame_id_) {
+    if (global_plan->frame_id != frame_id_) {
       RCLCPP_WARN(
         this->get_logger(),
         "global_plan frame_id '%s' does not match pose frame_id '%s'. "
         "Topic is ignored.",
-        global_plan_msg->header.frame_id.c_str(), frame_id_.c_str());
+        global_plan->frame_id.c_str(), frame_id_.c_str());
       return;
     }
 
-    for (const auto & pose_msg_data : global_plan_msg->poses) {
-      if (!pose_msg_data.header.frame_id.empty() && pose_msg_data.header.frame_id != frame_id_) {
+    // check path has nan
+    for (const auto & point_stamped : global_plan->data.data) {
+      if (point_stamped.data.translation().array().isNaN().any() || point_stamped.data.linear().array().isNaN().any()) {
         RCLCPP_WARN(
           this->get_logger(),
-          "global_plan pose frame_id '%s' does not match pose frame_id '%s'. "
-          "Topic is ignored.",
-          pose_msg_data.header.frame_id.c_str(), frame_id_.c_str());
+          "global_plan has NaN. Topic is ignored. Check frame_ids.");
         return;
       }
     }
 
-    global_plan_.clear();
-    global_plan_.reserve(global_plan_msg->poses.size());
-    for (const auto & pose_msg_data : global_plan_msg->poses) {
-      Stamped<Vector3> point_stamped;
-      point_stamped.stamp_nanosec =
-        static_cast<std::uint64_t>(pose_msg_data.header.stamp.sec * 1e9) +
-        pose_msg_data.header.stamp.nanosec;
-      point_stamped.data.x = pose_msg_data.pose.position.x;
-      point_stamped.data.y = pose_msg_data.pose.position.y;
-      point_stamped.data.z = pose_msg_data.pose.position.z;
-      global_plan_.push_back(point_stamped);
-    }
+    // update global_plan
+    global_plan_ = std::move(global_plan);
 
     // publish local plan
-    this->publish_local_plan();
+    this->publish_local_plan(global_plan_->data.stamp_nanosec);
   }
 
-  void update_pose(const PoseMsg::SharedPtr & pose_msg)
+  void update_pose(std::shared_ptr<const PoseWithCovarianceStamped> pose)
   {
-    // get pose tf
-    if (frame_id_.empty()) {
-      frame_id_ = pose_msg->header.frame_id;
-    } else if (frame_id_ != pose_msg->header.frame_id) {
-      RCLCPP_WARN(
+    // check frame_id
+    if (frame_id_ != pose->frame_id) {
+      RCLCPP_WARN_ONCE(
         this->get_logger(),
-        "pose frame_id '%s' does not match current frame_id '%s'. "
+        "pose frame_id '%s' does not match frame_id '%s'. "
         "Topic is ignored.",
-        pose_msg->header.frame_id.c_str(), frame_id_.c_str());
+        pose->frame_id.c_str(), frame_id_.c_str());
       return;
     }
-    tf2::Vector3 pose_vec;
-    tf2::fromMsg(pose_msg->pose.position, pose_vec);
 
     // update pose
-    Stamped<Vector3> pose;
-    pose.stamp_nanosec =
-      static_cast<std::uint64_t>(pose_msg->header.stamp.sec * 1e9) + pose_msg->header.stamp.nanosec;
-    pose.data.x = pose_vec.x();
-    pose.data.y = pose_vec.y();
-    pose.data.z = pose_vec.z();
-    pose_opt_ = pose;
+    pose_ = std::move(pose);
+
+    // chack initialized global_plan
+    if (!global_plan_) {
+      return;
+    }
 
     // publish local plan
-    this->publish_local_plan();
+    this->publish_local_plan(pose_->data.stamp_nanosec);
   }
 
-  // path & pose
+  // parameter
   std::string frame_id_;
-  std::vector<Stamped<Vector3>> global_plan_;
-  std::optional<Stamped<Vector3>> pose_opt_;
+
+  // path & pose
+  std::shared_ptr<const Path> global_plan_;
+  std::shared_ptr<const PoseWithCovarianceStamped> pose_;
 
   // publisher
-  rclcpp::Publisher<PathMsg>::SharedPtr local_plan_pub_;
+  rclcpp::Publisher<adapter::Path>::SharedPtr local_plan_pub_;
 
   // subscriptions
-  rclcpp::Subscription<PathMsg>::SharedPtr global_plan_sub_;
-  rclcpp::Subscription<PoseMsg>::SharedPtr pose_sub_;
+  rclcpp::Subscription<adapter::Path>::SharedPtr global_plan_sub_;
+  rclcpp::Subscription<adapter::PoseWithCovarianceStamped>::SharedPtr pose_sub_;
 };
 
 }  // namespace d2::controller::ros2

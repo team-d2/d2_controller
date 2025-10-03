@@ -38,7 +38,7 @@ class CmdVelLimiterNode : public rclcpp::Node
   using AccelMsg = geometry_msgs::msg::Accel;
 
 public:
-  static constexpr auto kDefaultNodeName = "d2_cmd_vel_limiter";
+  static constexpr auto kDefaultNodeName = "cmd_vel_limiter";
 
   D2__CONTROLLER__ROS2_PUBLIC
   inline CmdVelLimiterNode(
@@ -66,24 +66,15 @@ public:
     last_vel_time_(this->now()),
     last_vel_linear_vec_(0.0, 0.0, 0.0),
     last_vel_angular_vec_(0.0, 0.0, 0.0),
-    cmd_vel_pub_(this->create_publisher<TwistMsg>("cmd_vel", 10)),
-    vel_limit_vec_sub_(this->create_subscription<TwistMsg>(
-        "vel_limit", 10,
-        [this](TwistMsg::ConstSharedPtr msg) {this->set_vel_limit(std::move(msg));})),
-    accel_limit_sub_(
-      this->create_subscription<AccelMsg>(
-        "accel_limit", 10,
-        [this](AccelMsg::ConstSharedPtr msg) {this->set_accel_limit(std::move(msg));}))
+    cmd_vel_pub_(this->create_cmd_vel_publisher()),
+    vel_limit_vec_sub_(this->create_vel_limit_subscription()),
+    accel_limit_sub_(this->create_accel_limit_subscription())
   {
-    const auto rate = this->declare_parameter<double>("publish_rate", 60.0);
+    const auto rate = this->declare_parameter<double>("cmd_vel_limit_rate", 60.0);
     if (rate <= 0.0) {
-      cmd_vel_nav_sub_ = this->create_subscription<TwistMsg>(
-        "cmd_vel_nav", 10,
-        [this](TwistMsg::ConstSharedPtr msg) {this->limit_cmd_vel(std::move(msg));});
+      cmd_vel_nav_sub_ = this->create_async_cmd_vel_nav_subscription();
     } else {
-      cmd_vel_nav_sub_ = this->create_subscription<TwistMsg>(
-        "cmd_vel_nav", 10,
-        [this](TwistMsg::ConstSharedPtr msg) {this->initialize_cmd_vel_nav(std::move(msg));});
+      cmd_vel_nav_sub_ = this->create_sync_cmd_vel_nav_subscription();
     }
   }
 
@@ -163,6 +154,66 @@ private:
     tf2::Matrix3x3 mat;
   }
 
+  inline rclcpp::Publisher<TwistMsg>::SharedPtr create_cmd_vel_publisher()
+  {
+    rclcpp::PublisherOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    return this->create_publisher<TwistMsg>("cmd_vel", rclcpp::QoS(10), options);
+  }
+
+  inline rclcpp::Subscription<AccelMsg>::SharedPtr create_accel_limit_subscription()
+  {
+    rclcpp::SubscriptionOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth, rclcpp::QosPolicyKind::Durability,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    return this->create_subscription<AccelMsg>(
+      "accel_limit", rclcpp::QoS(10),
+      [this](AccelMsg::ConstSharedPtr msg) {this->set_accel_limit(std::move(msg));}, options);
+  }
+
+  inline rclcpp::Subscription<TwistMsg>::SharedPtr create_vel_limit_subscription()
+  {
+    rclcpp::SubscriptionOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth, rclcpp::QosPolicyKind::Durability,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
+    return this->create_subscription<TwistMsg>(
+      "vel_limit", rclcpp::QoS(10),
+      [this](TwistMsg::ConstSharedPtr msg) {this->set_vel_limit(std::move(msg));}, options);
+  }
+
+  inline rclcpp::Subscription<TwistMsg>::SharedPtr create_async_cmd_vel_nav_subscription()
+  {
+    rclcpp::SubscriptionOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    return this->create_subscription<TwistMsg>(
+      "cmd_vel_nav", rclcpp::QoS(10).best_effort(),
+      [this](TwistMsg::ConstSharedPtr msg) {this->limit_cmd_vel(std::move(msg));}, options);
+  }
+
+  inline rclcpp::Subscription<TwistMsg>::SharedPtr create_sync_cmd_vel_nav_subscription()
+  {
+    rclcpp::SubscriptionOptions options;
+    options.qos_overriding_options = {
+      rclcpp::QosPolicyKind::Depth,
+      rclcpp::QosPolicyKind::History,
+      rclcpp::QosPolicyKind::Reliability};
+    return this->create_subscription<TwistMsg>(
+      "cmd_vel_nav", rclcpp::QoS(10).best_effort(),
+      [this](TwistMsg::ConstSharedPtr msg) {this->initialize_cmd_vel_nav(std::move(msg));}, options);
+  }
+
   void limit_cmd_vel(TwistMsg::ConstSharedPtr cmd_vel_nav_msg)
   {
     // get current time
@@ -232,11 +283,12 @@ private:
       "cmd_vel_nav", 10,
       [this](TwistMsg::ConstSharedPtr msg) {this->set_cmd_vel_nav(std::move(msg));});
     publish_timer_ = this->create_wall_timer(
-      std::chrono::duration<double>(1.0 / this->get_parameter("publish_rate").as_double()),
+      std::chrono::duration<double>(1.0 / this->get_parameter("cmd_vel_limit_rate").as_double()),
       [this]() {this->limit_cmd_vel();});
   }
 
   // parameter
+  double rate_;
   rclcpp::Duration timeout_duration_;
 
   // msg

@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef D2__CONTROLLER__BOUNDING_BOX_3D_HPP_
-#define D2__CONTROLLER__BOUNDING_BOX_3D_HPP_
+#ifndef D2__CONTROLLER__WITH_FRAME_ID_HPP_
+#define D2__CONTROLLER__WITH_FRAME_ID_HPP_
 
-#include <optional>
-#include <vector>
+#include <string>
 
-namespace d2::controller::ros2
+namespace d2::controller
 {
 
-struct BoundingBox3D
+template<class Data>
+struct WithFrameId
 {
-  double x_min, x_max;
-  double y_min, y_max;
-  double z_min, z_max;
+  std::string frame_id;
+  Data data;
 };
 
-}  // namespace d2::controller::ros2
+}  // namespace d2::controller
 
-#endif  // D2__CONTROLLER__BOUNDING_BOX_3D_HPP_
+#endif  // D2__CONTROLLER__WITH_FRAME_ID_HPP_

@@ -15,6 +15,8 @@
 #ifndef D2__CONTROLLER__STAMPED_HPP_
 #define D2__CONTROLLER__STAMPED_HPP_
 
+#include <cstdint>
+
 namespace d2::controller
 {
 

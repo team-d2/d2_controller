@@ -18,7 +18,7 @@
   <arg name="pose_topic_name" default="$(var namespace)/pose"/>
   <arg name="global_plan_topic_name" default="$(var namespace)/global_plan"/>
   <arg name="lidar_points_topic_name" default="$(var namespace)/lidar/points"/>
-  <arg name="vel_limit_topic_name" default="$(var namespace)/vel_limit"/>
+  <!-- <arg name="vel_limit_topic_name" default="$(var namespace)/vel_limit"/> -->
   <arg name="accel_limit_topic_name" default="$(var namespace)/accel_limit"/>
   <arg name="cmd_vel_topic_name" default="$(var namespace)/cmd_vel"/>
 
@@ -58,17 +58,16 @@
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="pose" to="$(var controller_pose_topic_name)"/>
       <remap from="global_plan" to="$(var controller_global_plan_topic_name)"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
     </composable_node>
     <composable_node
         pkg="$(var project_name)"
-        plugin="$(var project_namespace)::ros2::ObstaceleStopperNode"
-        name="obstacle_stopper">
+        plugin="$(var project_namespace)::ros2::ObstaceleVelLimitterNode"
+        name="obstacle_vel_limitter">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="lidar/points" to="$(var lidar_points_topic_name)"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
+      <remap from="obstacle_vel_limit" to="vel_limit"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
     </composable_node>
@@ -77,21 +76,8 @@
         plugin="$(var project_namespace)::ros2::PurePursuitNode"
         name="pure_pursuit">
       <param from="$(var params_file)" allow_substs="true"/>
-      <remap from="local_plan" to="local_plan_clipped_by_obstacle"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-      <extra_arg name="use_intra_process_comms" value="true"/>
-    </composable_node>
-    <composable_node
-        pkg="$(var project_name)"
-        plugin="$(var project_namespace)::ros2::TargetPointFollowerNode"
-        name="target_point_follower">
-      <param from="$(var params_file)" allow_substs="true"/>
-      <remap from="pose" to="$(var controller_pose_topic_name)"/>
-      <remap from="cmd_vel/stamped" to="cmd_vel_nav/stamped"/>
       <remap from="cmd_vel" to="cmd_vel_nav"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
-      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
     </composable_node>
     <composable_node
@@ -100,9 +86,8 @@
         name="cmd_vel_limiter">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="cmd_vel" to="$(var cmd_vel_topic_name)"/>
-      <remap from="vel_limit" to="$(var vel_limit_topic_name)"/>
+      <!-- <remap from="vel_limit" to="$(var vel_limit_topic_name)"/> -->
       <remap from="accel_limit" to="$(var accel_limit_topic_name)"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
     </composable_node>
@@ -121,9 +106,8 @@
         name="pose_transformer">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="pose" to="$(var pose_topic_name)"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-      <extra_arg name="use_intra_process_comms" value="true"/>
+      <!-- <extra_arg name="use_intra_process_comms" value="true"/> -->
     </composable_node>
   </load_composable_node>
 
@@ -140,9 +124,8 @@
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="path" to="$(var global_plan_topic_name)"/>
       <remap from="path/transformed" to="global_plan/transformed"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-      <extra_arg name="use_intra_process_comms" value="true"/>
+      <!-- <extra_arg name="use_intra_process_comms" value="true"/> -->
     </composable_node>
   </load_composable_node>
       
@@ -158,17 +141,16 @@
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="pose" to="$(var controller_pose_topic_name)"/>
       <remap from="global_plan" to="$(var controller_global_plan_topic_name)"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
     </node>
     <node
         pkg="$(var project_name)"
-        exec="obstacle_stopper_node"
-        name="obstacle_stopper"
+        exec="obstacle_vel_limitter_node"
+        name="obstacle_vel_limitter"
         output="screen">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="lidar/points" to="$(var lidar_points_topic_name)"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
+      <remap from="obstacle_vel_limit" to="vel_limit"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
     </node>
     <node
@@ -177,21 +159,8 @@
         name="pure_pursuit"
         output="screen">
       <param from="$(var params_file)" allow_substs="true"/>
-      <remap from="local_plan" to="local_plan_clipped_by_obstacle"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-    </node>
-    <node
-        pkg="$(var project_name)"
-        exec="target_point_follower_node"
-        name="target_point_follower"
-        output="screen">
-      <param from="$(var params_file)" allow_substs="true"/>
-      <remap from="pose" to="$(var controller_pose_topic_name)"/>
-      <remap from="cmd_vel/stamped" to="cmd_vel_nav/stamped"/>
       <remap from="cmd_vel" to="cmd_vel_nav"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
-      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
     </node>
     <node
         pkg="$(var project_name)"
@@ -200,9 +169,8 @@
         output="screen">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="cmd_vel" to="$(var cmd_vel_topic_name)"/>
-      <remap from="vel_limit" to="$(var vel_limit_topic_name)"/>
+      <!-- <remap from="vel_limit" to="$(var vel_limit_topic_name)"/> -->
       <remap from="accel_limit" to="$(var accel_limit_topic_name)"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
     </node>
     
@@ -215,7 +183,6 @@
         output="screen">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="pose" to="$(var pose_topic_name)"/>
-      <remap from="/tf" to="$(var tf_topic_name)"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
     </node>
     <node

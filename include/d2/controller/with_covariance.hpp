@@ -12,7 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "d2/controller/ros2/obstacle_stopper_node.hpp"
-#include "rclcpp_components/register_node_macro.hpp"
+#ifndef D2__CONTROLLER__WITH_COVARIANCE_HPP_
+#define D2__CONTROLLER__WITH_COVARIANCE_HPP_
 
-RCLCPP_COMPONENTS_REGISTER_NODE(d2::controller::ros2::ObstaceleStopperNode)
+#include <cstddef>
+
+#include "Eigen/Core"
+
+namespace d2::controller
+{
+
+template<std::size_t kSize, class Data>
+struct WithCovariance
+{
+  Eigen::Matrix<double, kSize, kSize> covariance;
+  Data data;
+};
+
+}  // namespace d2::controller
+
+#endif  // D2__CONTROLLER__WITH_COVARIANCE_HPP_
