@@ -1,0 +1,118 @@
+<launch>
+  <!-- package configs -->
+  <let name="project_name" value="d2_controller"/>
+  <let name="project_namespace" value="d2::controller"/>
+  <let name="project_share" value="$(find-pkg-share $(var project_name))"/>
+
+  <!-- global args -->
+  <arg name="namespace" default=""/>
+  <arg name="container_name" default="d2_controller_container"/>
+  <arg name="params_file" default="$(var project_share)/config/pure_pursuit.param.yaml"/>
+  <arg name="use_sim_time" default="false"/>
+
+  <!-- launch args -->
+  <arg name="use_pose_transformer" default="true"/>
+  <arg name="use_global_plan_transformer" default="true"/>
+  <arg name="controller_name" default="d2_controller"/>
+  <arg name="pose_topic_name" default="$(var namespace)/pose"/>
+  <arg name="global_plan_topic_name" default="$(var namespace)/global_plan"/>
+  <arg name="lidar_points_topic_name" default="$(var namespace)/lidar/points"/>
+  <!-- <arg name="vel_limit_topic_name" default="$(var namespace)/vel_limit"/> -->
+  <arg name="accel_limit_topic_name" default="$(var namespace)/accel_limit"/>
+  <arg name="cmd_vel_topic_name" default="$(var namespace)/cmd_vel"/>
+
+  <let name="controller_pose_topic_name" value="pose/transformed" if="$(var use_pose_transformer)"/>
+  <let name="controller_pose_topic_name" value="$(var pose_topic_name)" unless="$(var use_pose_transformer)"/>
+  <let name="controller_global_plan_topic_name" value="global_plan/transformed" if="$(var use_global_plan_transformer)"/>
+  <let name="controller_global_plan_topic_name" value="$(var global_plan_topic_name)" unless="$(var use_global_plan_transformer)"/>
+  <let name="tf_topic_name" value="$(var namespace)/tf"/>
+  <let name="diagnostics_topic_name" value="$(var namespace)/diagnostics"/>
+
+  <!-- namespace -->
+  <push_ros_namespace namespace="$(var namespace)/$(var controller_name)"/>
+
+  <!-- global parameters -->
+  <set_parameter name="use_sim_time" value="$(var use_sim_time)"/>
+
+  <!-- components -->
+  <load_composable_node
+      target="$(var namespace)/$(var controller_name)/$(var container_name)">
+    <!-- controller -->
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::LocalPlannerNode"
+        name="local_planner">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="pose" to="$(var controller_pose_topic_name)"/>
+      <remap from="global_plan" to="$(var controller_global_plan_topic_name)"/>
+      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::ObstaceleVelLimitterNode"
+        name="obstacle_vel_limitter">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="lidar/points" to="$(var lidar_points_topic_name)"/>
+      <remap from="obstacle_vel_limit" to="vel_limit"/>
+      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::PurePursuitNode"
+        name="pure_pursuit">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+      <remap from="cmd_vel" to="cmd_vel_nav"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+    <composable_node
+        pkg="$(var project_name)"
+        plugin="$(var project_namespace)::ros2::CmdVelLimiterNode"
+        name="cmd_vel_limiter">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="cmd_vel" to="$(var cmd_vel_topic_name)"/>
+      <!-- <remap from="vel_limit" to="$(var vel_limit_topic_name)"/> -->
+      <remap from="accel_limit" to="$(var accel_limit_topic_name)"/>
+      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+      <extra_arg name="use_intra_process_comms" value="true"/>
+    </composable_node>
+  </load_composable_node>
+
+
+  <!-- components(use_pose_transformer) -->
+  <load_composable_node
+      if="$(eval &quot;('$(var container_name)'!='-' and '$(var use_pose_transformer)')&quot;)"
+      target="$(var namespace)/$(var controller_name)/$(var container_name)">
+    <!-- geometry_transformer -->
+    <composable_node
+        if="$(var use_pose_transformer)"
+        pkg="geometry_transformer"
+        plugin="geometry_transformer::ros2::PoseTransformerNode"
+        name="pose_transformer">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="pose" to="$(var pose_topic_name)"/>
+      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+      <!-- <extra_arg name="use_intra_process_comms" value="true"/> -->
+    </composable_node>
+  </load_composable_node>
+
+  <!-- components(use_global_plan_transformer) -->
+  <load_composable_node
+      if="$(eval &quot;('$(var container_name)'!='-' and '$(var use_global_plan_transformer)')&quot;)"
+      target="$(var namespace)/$(var controller_name)/$(var container_name)">
+    <!-- geometry_transformer -->
+    <composable_node
+        if="$(var use_global_plan_transformer)"
+        pkg="geometry_transformer"
+        plugin="geometry_transformer::ros2::PathTransformerNode"
+        name="global_plan_transformer">
+      <param from="$(var params_file)" allow_substs="true"/>
+      <remap from="path" to="$(var global_plan_topic_name)"/>
+      <remap from="path/transformed" to="global_plan/transformed"/>
+      <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+      <!-- <extra_arg name="use_intra_process_comms" value="true"/> -->
+    </composable_node>
+  </load_composable_node>
+</launch>

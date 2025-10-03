@@ -1,0 +1,33 @@
+<launch>
+  <!-- package configs -->
+  <let name="project_name" value="d2_controller"/>
+  <let name="project_namespace" value="d2::controller"/>
+  <let name="project_share" value="$(find-pkg-share $(var project_name))"/>
+
+  <!-- global args -->
+  <arg name="namespace" default=""/>
+  <arg name="container_name" default="d2_controller_container"/>
+  <arg name="thread_num" default="2"/>
+  <arg name="use_sim_time" default="false"/>
+
+  <!-- launch args -->
+  <arg name="controller_name" default="d2_controller"/>
+
+  <!-- namespace -->
+  <push_ros_namespace namespace="$(var namespace)/$(var controller_name)"/>
+
+  <!-- global parameters -->
+  <set_parameter name="use_sim_time" value="$(var use_sim_time)"/>
+
+  <!-- container -->
+  <node_container
+      pkg="rclcpp_components"
+      exec="component_container_mt"
+      namespace="$(var namespace)/$(var controller_name)"
+      name="$(var container_name)"
+      output="screen">
+    <param name="thread_num" value="$(var thread_num)"/>
+  </node_container>
+
+  <include file="$(var project_share)/launch/pure_pursuit.loader.launch.xml"/>
+</launch>
