@@ -64,7 +64,7 @@
         name="pure_pursuit">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-      <remap from="cmd_vel" to="cmd_vel_nav"/>
+      <remap from="cmd_vel" to="target_vel"/>
       <extra_arg name="use_intra_process_comms" value="true"/>
     </composable_node>
     <composable_node

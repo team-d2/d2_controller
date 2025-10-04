@@ -62,7 +62,7 @@
       output="screen">
     <param from="$(var params_file)" allow_substs="true"/>
     <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-    <remap from="cmd_vel" to="cmd_vel_nav"/>
+    <remap from="cmd_vel" to="target_vel"/>
   </node>
   <node
       pkg="$(var project_name)"
