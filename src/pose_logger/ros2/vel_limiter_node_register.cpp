@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "d2/controller/ros2/cmd_vel_limiter_node.hpp"
+#include "d2/controller/ros2/vel_limiter_node.hpp"
 #include "rclcpp_components/register_node_macro.hpp"
 
-RCLCPP_COMPONENTS_REGISTER_NODE(d2::controller::ros2::CmdVelLimiterNode)
+RCLCPP_COMPONENTS_REGISTER_NODE(d2::controller::ros2::VelLimiterNode)

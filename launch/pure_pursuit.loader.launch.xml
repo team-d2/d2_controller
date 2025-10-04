@@ -69,8 +69,8 @@
     </composable_node>
     <composable_node
         pkg="$(var project_name)"
-        plugin="$(var project_namespace)::ros2::CmdVelLimiterNode"
-        name="cmd_vel_limiter">
+        plugin="$(var project_namespace)::ros2::VelLimiterNode"
+        name="vel_limiter">
       <param from="$(var params_file)" allow_substs="true"/>
       <remap from="cmd_vel" to="$(var cmd_vel_topic_name)"/>
       <!-- <remap from="vel_limit" to="$(var vel_limit_topic_name)"/> -->

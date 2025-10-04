@@ -66,8 +66,8 @@
   </node>
   <node
       pkg="$(var project_name)"
-      exec="cmd_vel_limiter_node"
-      name="cmd_vel_limiter"
+      exec="vel_limiter_node"
+      name="vel_limiter"
       output="screen">
     <param from="$(var params_file)" allow_substs="true"/>
     <remap from="cmd_vel" to="$(var cmd_vel_topic_name)"/>

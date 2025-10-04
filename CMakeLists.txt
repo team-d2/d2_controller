@@ -58,8 +58,8 @@ install(DIRECTORY
 # register components(ROS2)
 if("$ENV{ROS_VERSION}" STREQUAL "2")
 rclcpp_components_register_node(${PROJECT_NAME}_lib
-  PLUGIN "${PROJECT_NAMESPACE}::ros2::CmdVelLimiterNode"
-  EXECUTABLE "cmd_vel_limiter_node")
+  PLUGIN "${PROJECT_NAMESPACE}::ros2::VelLimiterNode"
+  EXECUTABLE "vel_limiter_node")
 rclcpp_components_register_node(${PROJECT_NAME}_lib
   PLUGIN "${PROJECT_NAMESPACE}::ros2::LocalPlannerNode"
   EXECUTABLE "local_planner_node")

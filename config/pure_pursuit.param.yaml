@@ -35,7 +35,7 @@
         x: .inf
         y: .inf
         z: 1.0
-    cmd_vel_timeout: 10.0
+    cmd_vel_timeout: 1.0
     cmd_vel_limit_rate: 60.0
     qos_overrides:
       $(var pose_topic_name):
