@@ -102,7 +102,7 @@ private:
       rclcpp::QosPolicyKind::History,
       rclcpp::QosPolicyKind::Reliability};
     return this->create_subscription<adapter::PoseWithCovarianceStamped>(
-      "pose", rclcpp::QoS(10).best_effort(),
+      "pose/with_cov", rclcpp::QoS(10).best_effort(),
       [this](std::shared_ptr<const PoseWithCovarianceStamped> path) {this->update_pose(std::move(path));}, options);
   }
 

@@ -21,7 +21,7 @@
   <arg name="accel_limit_topic_name" default="$(var namespace)/accel_limit"/>
   <arg name="cmd_vel_topic_name" default="$(var namespace)/cmd_vel"/>
 
-  <let name="controller_pose_topic_name" value="pose/transformed" if="$(var use_pose_transformer)"/>
+  <let name="controller_pose_topic_name" value="pose/with_cov/transformed" if="$(var use_pose_transformer)"/>
   <let name="controller_pose_topic_name" value="$(var pose_topic_name)" unless="$(var use_pose_transformer)"/>
   <let name="controller_global_plan_topic_name" value="global_plan/transformed" if="$(var use_global_plan_transformer)"/>
   <let name="controller_global_plan_topic_name" value="$(var global_plan_topic_name)" unless="$(var use_global_plan_transformer)"/>
@@ -41,7 +41,7 @@
       name="local_planner"
       output="screen">
     <param from="$(var params_file)" allow_substs="true"/>
-    <remap from="pose" to="$(var controller_pose_topic_name)"/>
+    <remap from="pose/with_cov" to="$(var controller_pose_topic_name)"/>
     <remap from="global_plan" to="$(var controller_global_plan_topic_name)"/>
     <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
   </node>
@@ -77,16 +77,16 @@
   </node>
   
   <!-- geometry_transformer -->
-  <!-- <node
+  <node
       if="$(var use_pose_transformer)"
       pkg="geometry_transformer"
-      exec="pose_transformer_node"
-      name="pose_transformer"
+      exec="pose_with_covariance_transformer_node"
+      name="pose_with_covariance_transformer"
       output="screen">
     <param from="$(var params_file)" allow_substs="true"/>
-    <remap from="pose" to="$(var pose_topic_name)"/>
+    <remap from="pose/with_cov" to="$(var pose_topic_name)"/>
     <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-  </node> -->
+  </node>
   <node
       if="$(var use_global_plan_transformer)"
       pkg="geometry_transformer"
