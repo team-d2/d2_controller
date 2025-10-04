@@ -121,6 +121,7 @@ private:
     cmd_vel_pub_->publish(std::move(cmd_vel));
     
     // publish target point
+    point_stamped->data.stamp_nanosec = this->now().nanoseconds();
     target_point_pub_->publish(std::move(point_stamped));
   }
 

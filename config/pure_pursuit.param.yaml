@@ -4,19 +4,19 @@
     purepursuit:
       lookahead_distance: 3.0
     follow_point:
-      vel_per_distance: 0.1
-      margin_distance: 1.0
+      vel_per_distance: 0.3
+      margin_distance: 1.5
     obstacle_speed_limitter:
-      speed_per_distance: 0.1
-      offset_distance: 1.0
+      speed_per_distance: 0.4
+      offset_distance: 0.8
     robot:
       width: 0.7
       min_turning_radius: 1.5
     lidar:
-      min_distance: 0.4
+      min_distance: 0.6
       obstacle:
-        z_min: -1.0
-        z_max: 0.0
+        z_min: 0.4
+        z_max: 0.5
     vel_limit:
       linear:
         x: 0.2
@@ -104,11 +104,11 @@
         publisher:
           depth: 10
           history: keep_last
-          reliability: best_effort
+          reliability: reliable
         subscription:
           depth: 10
           history: keep_last
-          reliability: best_effort
+          reliability: reliable
       $(var cmd_vel_topic_name):
         publisher:
           depth: 10

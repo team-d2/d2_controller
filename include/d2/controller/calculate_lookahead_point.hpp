@@ -52,7 +52,7 @@ inline Stamped<Eigen::Vector3d> calculate_lookahead_point(
     const Eigen::Vector3d vec = itr_next->data.translation() - itr->data.translation();
     const auto section_distance = vec.norm();
 
-    if (section_distance < lookahead_distance) {
+    if (section_distance >= lookahead_distance) {
       const auto rate = lookahead_distance / section_distance;
       return Stamped<Eigen::Vector3d>
       {

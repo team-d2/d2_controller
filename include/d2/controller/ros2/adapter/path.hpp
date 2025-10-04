@@ -40,6 +40,7 @@ public:
       pose_stamped.pose.orientation.y = q.y();
       pose_stamped.pose.orientation.z = q.z();
       pose_stamped.pose.orientation.w = q.w();
+      destination.poses.emplace_back(pose_stamped);
     }
   }
 

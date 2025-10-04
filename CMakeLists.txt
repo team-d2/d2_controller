@@ -72,6 +72,9 @@ rclcpp_components_register_node(${PROJECT_NAME}_lib
 rclcpp_components_register_node(${PROJECT_NAME}_lib
   PLUGIN "${PROJECT_NAMESPACE}::ros2::ObstaceleVelLimitterNode"
   EXECUTABLE "obstacle_vel_limitter_node")
+rclcpp_components_register_node(${PROJECT_NAME}_lib
+  PLUGIN "${PROJECT_NAMESPACE}::ros2::PosePublisherNode"
+  EXECUTABLE "pose_publisher_node")
 endif()
 
 # test

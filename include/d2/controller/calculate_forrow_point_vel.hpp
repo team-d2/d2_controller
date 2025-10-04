@@ -40,7 +40,7 @@ inline Eigen::Vector<double, 6> calculate_forrow_point_vel(
   const auto rot_vec_length_inv = 1.0 / rot_vec_length;
   const auto dot = direction_x.dot(error_vec);
   const auto error_angle = std::atan2(rot_vec_length, dot) * 2.0;
-  const auto error_radius = error_vec.squaredNorm() * rot_vec_length_inv;
+  const auto error_radius = error_vec.squaredNorm() * rot_vec_length_inv * 0.5;
   const auto error_distance = error_radius * error_angle;
   if (error_distance <= param.margin_distance) {
     // 近すぎる場合
@@ -55,9 +55,9 @@ inline Eigen::Vector<double, 6> calculate_forrow_point_vel(
     linear_speed,
     0.0,
     0.0,
+    0.0,
     angular_speed * rot_vec_length_inv * direction_y.dot(rot_vec),
-    angular_speed * rot_vec_length_inv * direction_z.dot(rot_vec),
-    0.0};
+    angular_speed * rot_vec_length_inv * direction_z.dot(rot_vec),};
 }
 
 }

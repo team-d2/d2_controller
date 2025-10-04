@@ -15,6 +15,10 @@
 #ifndef D2__CONTROLLER__CALCULATE_LOCAL_PLAN_HPP_
 #define D2__CONTROLLER__CALCULATE_LOCAL_PLAN_HPP_
 
+#include <cstdint>
+#include <iterator>
+#include <limits>
+#include <cmath>
 #include <vector>
 
 #include "Eigen/Core"
@@ -48,12 +52,12 @@ std::vector<Stamped<Eigen::Isometry3d>> calculate_local_plan(
     global_plan_last_itr = global_plan_itr, global_plan_itr = std::next(global_plan_itr))
   {
     // パスの点とpositionの距離を計算
-    const auto & path_point = global_plan_itr->data.translation();
+    const auto path_point = global_plan_itr->data.translation();
     const auto position_vec = pose.data.translation() - path_point;
     const auto position_vec_length2 = position_vec.squaredNorm();
 
     // パスの点とパスの前回の点の距離を計算
-    const auto & path_point_last = global_plan_last_itr->data.translation();
+    const auto path_point_last = global_plan_last_itr->data.translation();
     const auto reverce_vec = path_point_last - path_point;
     const auto reverce_vec_length2 = reverce_vec.squaredNorm();
     if (reverce_vec_length2 == 0) {

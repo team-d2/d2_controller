@@ -32,7 +32,7 @@ struct ObstacleSpeedLimitParam
   double offset_distance;
   double robot_width_harf;
   double min_turning_radius;
-  double lidar_min_distance;
+  double lidar_ignore_x_min, lidar_ignore_x_max, lidar_ignore_y_min, lidar_ignore_y_max;
   double z_min, z_max;
 };
 
@@ -44,9 +44,15 @@ inline double calculate_obstacle_speed_limit(const pcl::PointCloud<pcl::PointXYZ
   // 物体までの距離を計算
   double min_distance = std::numeric_limits<double>::infinity();
   for (const auto & lidar_point : lidar_points) {
-    // 高さが範囲外か，近すぎる
-    if (lidar_point.z < param.z_min || param.z_max < lidar_point.z || lidar_point.x * lidar_point.x + lidar_point.y * lidar_point.y + lidar_point.z + lidar_point.z < param.lidar_min_distance * param.lidar_min_distance) {
-      continue;
+    {
+      // 境界外とnanを除外
+      const bool is_out_of_z_range = lidar_point.z < param.z_min || param.z_max < lidar_point.z;
+      const bool is_too_close = param.lidar_ignore_x_min < lidar_point.x && lidar_point.x < param.lidar_ignore_x_max &&
+        param.lidar_ignore_y_min < lidar_point.y && lidar_point.y < param.lidar_ignore_y_max;
+      const bool is_nan = std::isnan(lidar_point.x) || std::isnan(lidar_point.y) || std::isnan(lidar_point.z);
+      if (is_out_of_z_range || is_too_close || is_nan) {
+        continue;
+      }
     }
 
     // 計算のため，右半分の点は左側に移す
@@ -61,24 +67,35 @@ inline double calculate_obstacle_speed_limit(const pcl::PointCloud<pcl::PointXYZ
     }
 
     // 最小旋回時にぶつかる
-    if (min_turning_centor_distance < param.min_turning_radius - param.robot_width_harf) {
+    if (min_turning_centor_distance < param.min_turning_radius + param.robot_width_harf) {
       const auto angle = std::atan2(lidar_point_mirrored_vec[0], param.min_turning_radius - lidar_point_mirrored_vec[1]);
       const auto angle_normalized = angle < 0 ? angle + M_PI * 2 : angle;
-      min_distance = std::min(angle_normalized * param.min_turning_radius, min_distance);
+      if (param.min_turning_radius < param.offset_distance) {
+        return 0;
+      }
+      const auto angle_offset = std::asin(param.offset_distance / param.min_turning_radius);
+      min_distance = std::min((angle_normalized - angle_offset) * param.min_turning_radius, min_distance);
+
+      if (min_distance <= 0.0) {
+        return 0.0;
+      }
       continue;
     }
 
     // ロボットが旋回する最も外側がぶつかることを想定
     const auto lidar_opint_mirrored_from_robot_right = Eigen::Vector2d{lidar_point_mirrored_vec[0], lidar_point_mirrored_vec[1] + param.robot_width_harf};
-    const auto angle = std::atan2(lidar_opint_mirrored_from_robot_right[1], -lidar_opint_mirrored_from_robot_right[0]) * 2;
+    const auto angle = std::atan2(lidar_opint_mirrored_from_robot_right[1], lidar_opint_mirrored_from_robot_right[0]) * 2;
     const auto angle_normalized = angle < 0 ? angle + M_PI * 2 : angle;
     const auto turning_radius = 0.5 * lidar_opint_mirrored_from_robot_right.squaredNorm() / lidar_opint_mirrored_from_robot_right[1] - param.robot_width_harf;
-    min_distance = std::min(angle_normalized * turning_radius, min_distance);
+    if (turning_radius < param.offset_distance) {
+      return 0;
+    }
+    const auto angle_offset = std::asin(param.offset_distance / turning_radius);
+    min_distance = std::min((angle_normalized - angle_offset) * turning_radius, min_distance);
   }
 
-  // オフセットして速度を計算
-  double min_distance_offsetted = std::max(min_distance - param.offset_distance, 0.0);
-  return param.speed_per_distance * min_distance_offsetted;
+  // 速度を計算
+  return std::max(param.speed_per_distance * min_distance, 0.0);
 }
 
 }  // namespace

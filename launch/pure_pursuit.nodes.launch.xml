@@ -77,7 +77,7 @@
   </node>
   
   <!-- geometry_transformer -->
-  <node
+  <!-- <node
       if="$(var use_pose_transformer)"
       pkg="geometry_transformer"
       exec="pose_transformer_node"
@@ -86,7 +86,7 @@
     <param from="$(var params_file)" allow_substs="true"/>
     <remap from="pose" to="$(var pose_topic_name)"/>
     <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-  </node>
+  </node> -->
   <node
       if="$(var use_global_plan_transformer)"
       pkg="geometry_transformer"

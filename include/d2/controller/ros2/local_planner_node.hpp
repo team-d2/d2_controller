@@ -45,7 +45,7 @@ public:
     const std::string & node_name, const std::string node_namespace,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : rclcpp::Node(node_name, node_namespace, options),
-    frame_id_(),
+    frame_id_(this->declare_parameter("frame_id", "map")),
     global_plan_(),
     pose_(),
     local_plan_pub_(this->create_local_plan_publisher()),
@@ -141,6 +141,10 @@ private:
 
     // update global_plan
     global_plan_ = std::move(global_plan);
+
+    if (!pose_) {
+      return;
+    }
 
     // publish local plan
     this->publish_local_plan(global_plan_->data.stamp_nanosec);
