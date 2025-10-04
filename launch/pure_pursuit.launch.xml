@@ -12,8 +12,8 @@
   <arg name="use_sim_time" default="false"/>
 
   <!-- launch args -->
-  <arg name="use_pose_transformer" default="true"/>
-  <arg name="use_global_plan_transformer" default="true"/>
+  <arg name="use_pose_transformer" default="false"/>
+  <arg name="use_global_plan_transformer" default="false"/>
   <arg name="controller_name" default="d2_controller"/>
   <arg name="pose_topic_name" default="$(var namespace)/pose"/>
   <arg name="global_plan_topic_name" default="$(var namespace)/global_plan"/>
