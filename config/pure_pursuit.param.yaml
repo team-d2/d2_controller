@@ -4,14 +4,14 @@
     purepursuit:
       lookahead_distance: 3.0
     follow_point:
-      vel_per_distance: 0.3
+      vel_per_distance: 0.4
       margin_distance: 1.5
     obstacle_speed_limitter:
-      speed_per_distance: 0.4
-      offset_distance: 0.8
+      speed_per_distance: 1.0
+      offset_distance: 0.7
     robot:
-      width: 0.7
-      min_turning_radius: 1.5
+      width: 0.6
+      min_turning_radius: 2.0
     lidar:
       min_distance: 0.6
       obstacle:
@@ -19,13 +19,13 @@
         z_max: 0.5
     vel_limit:
       linear:
-        x: 0.2
+        x: 0.4
         y: .inf
         z: .inf
       angular:
         x: .inf
         y: .inf
-        z: 0.2
+        z: 0.3
     accel_limit:
       linear:
         x: 1.0
