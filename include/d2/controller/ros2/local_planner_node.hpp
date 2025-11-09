@@ -129,6 +129,12 @@ private:
       return;
     }
 
+    // reset global_plan if empty
+    if (global_plan->data.data.empty()) {
+      global_plan_.reset();
+      return;
+    }
+
     // check path has nan
     for (const auto & point_stamped : global_plan->data.data) {
       if (point_stamped.data.translation().array().isNaN().any() || point_stamped.data.linear().array().isNaN().any()) {
