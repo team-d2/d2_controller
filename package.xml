@@ -13,6 +13,7 @@
   <depend condition="$ROS_VERSION == 2">nav_msgs</depend>
   <depend condition="$ROS_VERSION == 2">rclcpp</depend>
   <depend condition="$ROS_VERSION == 2">rclcpp_components</depend>
+  <depend condition="$ROS_VERSION == 2">d2_costmap_converter_msgs</depend>
   <depend>eigen</depend>
 
   <build_depend condition="$ROS_VERSION == 2">ament_cmake_auto</build_depend>
