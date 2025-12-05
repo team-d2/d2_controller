@@ -60,14 +60,13 @@ public:
     timeout_duration_(
       rclcpp::Duration::from_seconds(this->declare_parameter<double>("vel_timeout", 1.0))),
     rate_(this->declare_parameter<double>("vel_limiter.rate", 60.0)),
-    vel_limit_(vel_limit_param_),
     accel_limit_(accel_limit_param_),
     current_vel_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
     current_time_(this->now()),
     timeout_time_(this->now()),
     cmd_vel_pub_(this->create_cmd_vel_publisher()),
     target_vel_nav_sub_(this->create_target_vel_subscription()),
-    vel_limit_vec_sub_(this->create_vel_limit_subscription()),
+    vel_limit_vec_subs_(this->create_vel_limit_subscriptions(this->declare_parameter("vel_limit.topics", std::vector<std::string>{"vel_limit"}))),
     accel_limit_sub_(this->create_accel_limit_subscription()),
     publish_timer_(this->create_publish_timer())
   {
@@ -110,7 +109,18 @@ private:
       [this](std::shared_ptr<const Eigen::Vector<double, 6>> accel_ptr) {this->set_accel_limit(std::move(accel_ptr));}, options);
   }
 
-  inline rclcpp::Subscription<adapter::Twist>::SharedPtr create_vel_limit_subscription()
+  inline std::vector<rclcpp::Subscription<adapter::Twist>::SharedPtr> create_vel_limit_subscriptions(const std::vector<std::string> & topic_names)
+  {
+    std::vector<rclcpp::Subscription<adapter::Twist>::SharedPtr> subs;
+    vel_limit_ptrs_.reserve(topic_names.size());
+    for (const auto & topic_name : topic_names) {
+      const auto vel_limit_ptr_ptr = &vel_limit_ptrs_.emplace_back(std::make_shared<Eigen::Vector<double, 6>>(vel_limit_param_));
+      subs.push_back(this->create_vel_limit_subscription(topic_name, vel_limit_ptr_ptr));
+    }
+    return subs;
+  }
+
+  inline rclcpp::Subscription<adapter::Twist>::SharedPtr create_vel_limit_subscription(const std::string & topic_name, std::shared_ptr<const Eigen::Vector<double, 6>> *vel_limit_ptr_ptr)
   {
     rclcpp::SubscriptionOptions options;
     options.qos_overriding_options = {
@@ -119,8 +129,12 @@ private:
       rclcpp::QosPolicyKind::Reliability};
     options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
     return this->create_subscription<adapter::Twist>(
-      "vel_limit", rclcpp::QoS(10),
-      [this](std::shared_ptr<const Eigen::Vector<double, 6>> vel_ptr) {this->set_vel_limit(std::move(vel_ptr));}, options);
+      topic_name, rclcpp::QoS(10),
+      [vel_limit_ptr_ptr, topic_name](std::shared_ptr<const Eigen::Vector<double, 6>> vel_ptr) {
+        // std::cout << "Received vel_limit from topic: " << topic_name << std::endl;
+        *vel_limit_ptr_ptr = std::move(vel_ptr);
+        // std::cout << "vel_limit: " << **vel_limit_ptr_ptr << std::endl;
+      }, options);
   }
 
   inline rclcpp::Subscription<adapter::Twist>::SharedPtr create_target_vel_subscription()
@@ -159,19 +173,26 @@ private:
     const auto dt = (now - current_time_).seconds();
 
     // check timeout
-    if (now >= timeout_time_) {
+    if (now >= timeout_time_ || target_vel_ptr->hasNaN()) {
       // update state
+      RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 5000,
+        "Velocity command timeout. Stopping the robot.");
       current_vel_ = Eigen::Vector<double, 6>::Zero();
       current_time_ = now;
       return;
     }
 
     // limit vel
-    const auto vel_limited_vel = calculate_vel_limit(*target_vel_ptr, vel_limit_);
+    auto vel_limit = vel_limit_param_;
+    for (const auto & vl : vel_limit_ptrs_) {
+      vel_limit = vel_limit.cwiseMin(*vl);
+    }
+    const auto vel_limited_vel = calculate_vel_limit(*target_vel_ptr, vel_limit);
 
     // limit accel
     const auto vel_delta = vel_limited_vel - current_vel_;
-    const auto vel_delta_limit = accel_limit_ * dt;
+    const auto vel_delta_limit = dt == 0.0 ? Eigen::Vector<double, 6>::Zero().eval() : accel_limit_ * dt;
     const auto vel_delta_limited = calculate_vel_limit(vel_delta, vel_delta_limit);
     current_vel_ += vel_delta_limited;
 
@@ -190,11 +211,6 @@ private:
     timeout_time_ = now + timeout_duration_;
   }
 
-  void set_vel_limit(std::shared_ptr<const Eigen::Vector<double, 6>> vel_limit_ptr)
-  {
-    vel_limit_ = vel_limit_param_.cwiseMin(*vel_limit_ptr);
-  }
-
   void set_accel_limit(std::shared_ptr<const Eigen::Vector<double, 6>> accel_limit_ptr)
   {
     accel_limit_ = accel_limit_param_.cwiseMin(*accel_limit_ptr);
@@ -208,7 +224,7 @@ private:
 
   // state
   std::shared_ptr<const Eigen::Vector<double, 6>> target_vel_ptr_;
-  Eigen::Vector<double, 6> vel_limit_;
+  std::vector<std::shared_ptr<const Eigen::Vector<double, 6>>> vel_limit_ptrs_;
   Eigen::Vector<double, 6> accel_limit_;
   Eigen::Vector<double, 6> current_vel_;
   rclcpp::Time current_time_;
@@ -219,7 +235,7 @@ private:
 
   // subscription
   rclcpp::Subscription<adapter::Twist>::SharedPtr target_vel_nav_sub_;
-  rclcpp::Subscription<adapter::Twist>::SharedPtr vel_limit_vec_sub_;
+  std::vector<rclcpp::Subscription<adapter::Twist>::SharedPtr> vel_limit_vec_subs_;
   rclcpp::Subscription<adapter::Accel>::SharedPtr accel_limit_sub_;
 
   // timer

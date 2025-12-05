@@ -76,8 +76,8 @@ rclcpp_components_register_node(${PROJECT_NAME}_lib
   PLUGIN "${PROJECT_NAMESPACE}::ros2::PosePublisherNode"
   EXECUTABLE "pose_publisher_node")
 rclcpp_components_register_node(${PROJECT_NAME}_lib
-  PLUGIN "${PROJECT_NAMESPACE}::ros2::ObstacleAvoidanceNode"
-  EXECUTABLE "obstacle_avoidance_node")
+  PLUGIN "${PROJECT_NAMESPACE}::ros2::ObstacleAvoidancePlannerNode"
+  EXECUTABLE "obstacle_avoidance_planner_node")
 endif()
 
 # test

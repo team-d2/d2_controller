@@ -1,6 +1,8 @@
 #ifndef D2__CONTROLLER__CALCULATE_FORROW_POINT_VEL_HPP_
 #define D2__CONTROLLER__CALCULATE_FORROW_POINT_VEL_HPP_
 
+#include <iostream>
+
 #include "Eigen/Geometry"
 #include "Eigen/Core"
 
@@ -42,6 +44,7 @@ inline Eigen::Vector<double, 6> calculate_forrow_point_vel(
   const auto error_angle = std::atan2(rot_vec_length, dot) * 2.0;
   const auto error_radius = error_vec.squaredNorm() * rot_vec_length_inv * 0.5;
   const auto error_distance = error_radius * error_angle;
+  std::cout << "error_distance: " << error_distance << std::endl;
   if (error_distance <= param.margin_distance) {
     // 近すぎる場合
     return Eigen::Vector<double, 6>::Zero();
@@ -51,6 +54,7 @@ inline Eigen::Vector<double, 6> calculate_forrow_point_vel(
   const auto lookahead_angle = error_angle - margine_angle;
   const auto linear_speed = lookahead_distance * param.vel_per_distance;
   const auto angular_speed = lookahead_angle * param.vel_per_distance;
+  std::cout << "lookahead_distance: " << lookahead_distance << std::endl;
   return {
     linear_speed,
     0.0,

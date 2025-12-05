@@ -20,6 +20,7 @@
   <!-- <arg name="vel_limit_topic_name" default="$(var namespace)/vel_limit"/> -->
   <arg name="accel_limit_topic_name" default="$(var namespace)/accel_limit"/>
   <arg name="cmd_vel_topic_name" default="$(var namespace)/cmd_vel"/>
+  <arg name="cmd_vel_leg_topic_name" default="$(var namespace)/cmd_vel_leg"/>
 
   <let name="controller_pose_topic_name" value="pose/with_cov/transformed" if="$(var use_pose_transformer)"/>
   <let name="controller_pose_topic_name" value="$(var pose_topic_name)" unless="$(var use_pose_transformer)"/>
@@ -47,6 +48,17 @@
   </node>
   <node
       pkg="$(var project_name)"
+      exec="obstacle_avoidance_planner_node"
+      name="obstacle_avoidance_planner"
+      output="screen">
+    <param from="$(var params_file)" allow_substs="true"/>
+    <remap from="plan" to="local_plan"/>
+    <remap from="avoidanced_plan" to="avoidanced_local_plan"/>
+    <remap from="obstacles" to="/obstacles"/>
+    <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
+  </node>
+  <node
+      pkg="$(var project_name)"
       exec="obstacle_vel_limitter_node"
       name="obstacle_vel_limitter"
       output="screen">
@@ -62,8 +74,8 @@
       output="screen">
     <param from="$(var params_file)" allow_substs="true"/>
     <remap from="/diagnostics" to="$(var diagnostics_topic_name)"/>
-    <remap from="obstacles" to="/obstacles"/>
     <remap from="cmd_vel" to="target_vel"/>
+    <remap from="local_plan" to="avoidanced_local_plan"/>
   </node>
   <node
       pkg="$(var project_name)"

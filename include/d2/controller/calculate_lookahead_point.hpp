@@ -32,7 +32,7 @@ inline Stamped<Eigen::Vector3d> calculate_lookahead_point(
   const auto end = std::end(stamped_points);
 
   // check empty
-  if (begin == end) {
+  if (begin == end || begin->data.translation().hasNaN()) {
     constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
     return Stamped<Eigen::Vector3d>{
       0,
@@ -41,32 +41,37 @@ inline Stamped<Eigen::Vector3d> calculate_lookahead_point(
   }
 
   // search lookahead point
+  const auto lookahead_distance_sq = lookahead_distance * lookahead_distance;
+  auto itr_relative = Eigen::Vector3d::Zero().eval();
+  auto itr_relative_sq = 0.0;
   auto itr = begin;
-  auto itr_next = std::next(itr);
-  while (itr_next != end) {
-    // check itr_next nan
-    if (itr_next->data.translation().array().isNaN().any() || itr_next->data.linear().array().isNaN().any()) {
-      break;
+  auto next_itr = std::next(itr);
+  while (next_itr != end) {
+    if (next_itr->data.translation().hasNaN()) {
+      continue;
     }
 
-    const Eigen::Vector3d vec = itr_next->data.translation() - itr->data.translation();
-    const auto section_distance = vec.norm();
+    auto next_itr_relative = (next_itr->data.translation() - begin->data.translation()).eval();
+    auto next_itr_relative_sq = next_itr_relative.squaredNorm();
 
-    if (section_distance >= lookahead_distance) {
-      const auto rate = lookahead_distance / section_distance;
-      return Stamped<Eigen::Vector3d>
-      {
-        itr->stamp_nanosec + static_cast<std::uint64_t>(rate * (itr_next->stamp_nanosec - itr->stamp_nanosec)),
-        itr->data.translation() + rate * vec,
-      };
+    if (next_itr_relative_sq < lookahead_distance_sq) {
+      itr_relative = next_itr_relative;
+      itr_relative_sq = next_itr_relative_sq;
+      itr = next_itr;
+      next_itr = std::next(next_itr);
+      continue;
     }
 
-    // decrement lookahead_distance
-    lookahead_distance -= section_distance;
-
-    // increment itr
-    itr = itr_next;
-    itr_next = std::next(itr);
+    auto line = (next_itr->data.translation() - itr->data.translation()).eval();
+    auto line_sq = line.squaredNorm();
+    auto dot = itr_relative.dot(line);
+    auto line_rate = (-dot + std::sqrt(dot * dot - line_sq * (itr_relative_sq - lookahead_distance_sq))) / line_sq;
+    auto dt = next_itr->stamp_nanosec - itr->stamp_nanosec;
+    return Stamped<Eigen::Vector3d>
+    {
+      itr->stamp_nanosec + static_cast<std::uint64_t>(dt * line_rate),
+      itr->data.translation() + line_rate * line,
+    };
   }
 
   return Stamped<Eigen::Vector3d>

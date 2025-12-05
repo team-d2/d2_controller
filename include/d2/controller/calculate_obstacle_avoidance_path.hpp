@@ -114,23 +114,85 @@ std::list<IntersectionInfo> create_intersection_info_list(
   return intersection_infos;
 }
 
+inline std::tuple<Eigen::Vector2d, double> calculate_nearest_point_on_line_with_rate(
+  const Eigen::Vector2d & point,
+  const Line & line)
+{
+  const auto direction_sq = line.direction.squaredNorm();
+  if (direction_sq == 0.0) {
+    return {line.point, 0.0};
+  }
+  const auto dot = line.direction.dot(point - line.point);
+  const auto is_dot_backward = dot < 0.0;
+  const auto is_dot_forward = dot > direction_sq;
+  if (!is_dot_backward && !is_dot_forward) {
+    const auto rate = dot / direction_sq;
+    return {line.point + line.direction * rate, rate};
+  }
+  else if (is_dot_backward) {
+    return {line.point, 0.0};
+  }
+  else {
+    return {line.point + line.direction, 1.0};
+  }
+}
+
+inline std::tuple<Eigen::Vector2d, std::vector<Line>::const_iterator, double, double> calculate_nearest_point_on_polygon_with_itr_and_distance_and_rate(
+  const Eigen::Vector2d & point,
+  const std::vector<Line> & polygon)
+{
+  auto min_distance_sq = std::numeric_limits<double>::infinity();
+  std::vector<Line>::const_iterator nearest_line_itr;
+  Eigen::Vector2d nearest_point;
+  double nearest_rate = 0.0;
+  for (auto itr = polygon.begin(); itr != polygon.end(); ++itr) {
+    const auto [candidate_point, rate] = calculate_nearest_point_on_line_with_rate(point, *itr);
+    const auto distance_sq = (candidate_point - point).squaredNorm();
+    if (distance_sq >= min_distance_sq) {
+      continue;
+    }
+    min_distance_sq = distance_sq;
+    nearest_point = candidate_point;
+    nearest_line_itr = itr;
+    nearest_rate = rate;
+  }
+  std::cout << min_distance_sq << std::endl;
+  return {nearest_point, nearest_line_itr, std::sqrt(min_distance_sq), nearest_rate};
+}
+
 inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
   const std::deque<Eigen::Vector2d> & original_path_points,
-  const std::vector<Line> & obstacle_polygon)
+  const std::vector<Line> & obstacle_polygon, double threshold_distance)
 {
   // path_size_check
   if (original_path_points.empty()) {
     return {};
   }
 
+  auto avoidance_path = std::deque<Eigen::Vector2d>{original_path_points.front()};
+  std::vector<Line>::const_iterator intersection_obstacle_itr;
+  double intersection_obstacle_rate = 0.0;
+  // std::cout << "z" << std::endl;
   // check start point in obstacle
   if (is_point_in_polygon(original_path_points.front(), obstacle_polygon)) {
-    return {};
-  }
+    // std::cout << "a" << std::endl;
+    const auto [nearest_point, itr, distance, rate] =
+      calculate_nearest_point_on_polygon_with_itr_and_distance_and_rate(
+      original_path_points.front(), obstacle_polygon);
+    // std::cout << "b" << std::endl;
+    if (distance > threshold_distance) {
+      return {};
+    }
+    std::cout << distance << std::endl;
 
-  auto intersection_obstacle_itr = obstacle_polygon.end();
-  double intersection_obstacle_rate = 0.0;
-  auto avoidance_path = std::deque<Eigen::Vector2d>{original_path_points.front()};
+    intersection_obstacle_itr = itr;
+    intersection_obstacle_rate = rate;
+    avoidance_path.push_back(nearest_point);
+  }
+  else {
+    intersection_obstacle_rate = 0.0;
+    intersection_obstacle_itr = obstacle_polygon.end();
+  }
 
   std::vector<Line> original_path;
   original_path.reserve(original_path_points.size() - 1);
@@ -145,10 +207,12 @@ inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
     auto intersection_infos = create_intersection_info_list(original_line, obstacle_polygon);
     
     for (const auto & intersection_info : intersection_infos) {
+      // std::cout << "d" << std::endl;
       if (intersection_obstacle_itr == obstacle_polygon.end()) {
         avoidance_path.push_back(original_line.point + original_line.direction * intersection_info.path_rate);
         intersection_obstacle_itr = intersection_info.obstacle_itr;
         intersection_obstacle_rate = intersection_info.obstacle_rate;
+      // std::cout << "e" << std::endl;
       }
       else if (intersection_obstacle_itr < intersection_info.obstacle_itr) {
         auto start_line_length = intersection_obstacle_itr->direction.norm();
@@ -160,6 +224,7 @@ inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
           + calculate_path_length(obstacle_polygon.begin(), intersection_obstacle_itr)
           + start_line_length * intersection_obstacle_rate
           - end_line_length * intersection_info.obstacle_rate;
+      // std::cout << "f" << std::endl;
         if (obstacle_dist1 < obstacle_dist2) {
           for (auto itr = std::next(intersection_obstacle_itr); itr != std::next(intersection_info.obstacle_itr); ++itr) {
             avoidance_path.push_back(itr->point);
@@ -174,11 +239,13 @@ inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
             avoidance_path.push_back(itr->point);
           }
         }
+      // std::cout << "g" << std::endl;
         avoidance_path.push_back(
           original_line.point + original_line.direction * intersection_info.path_rate);
         intersection_obstacle_itr = obstacle_polygon.end();
       }
       else {
+      // std::cout << "h" << std::endl;
         auto start_line_length = intersection_obstacle_itr->direction.norm();
         auto end_line_length = intersection_info.obstacle_itr->direction.norm();
         auto obstacle_dist1 = calculate_path_length(intersection_info.obstacle_itr, intersection_obstacle_itr)
@@ -201,33 +268,37 @@ inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
             avoidance_path.push_back(itr->point);
           }
         }
+      // std::cout << "i" << std::endl;
         avoidance_path.push_back(
           original_line.point + original_line.direction * intersection_info.path_rate);
         intersection_obstacle_itr = obstacle_polygon.end();
       }
     }
+      // std::cout << "j" << std::endl;
 
     if (intersection_obstacle_itr == obstacle_polygon.end()) {
       avoidance_path.push_back(original_line.point + original_line.direction);
     }
+      // std::cout << "k" << std::endl;
   }
 
+      // std::cout << "l" << std::endl;
   return avoidance_path;
 }
 
 inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
   std::deque<Eigen::Vector2d> path,
-  const std::vector<std::vector<Line>> & obstacle_polygons)
+  const std::vector<std::vector<Line>> & obstacle_polygons, double threshold_distance)
 {
   for (const auto & obstacle_polygon : obstacle_polygons) {
-    path = calculate_obstacle_avoidance_path(path, obstacle_polygon);
+    path = calculate_obstacle_avoidance_path(path, obstacle_polygon, threshold_distance);
   }
   return path;
 }
 
 inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
   std::deque<Eigen::Vector2d> path,
-  const std::vector<Eigen::Vector2d> & obstacle_polygon)
+  const std::vector<Eigen::Vector2d> & obstacle_polygon, double threshold_distance)
 {
   std::vector<Line> polygon_lines;
   polygon_lines.reserve(obstacle_polygon.size());
@@ -243,15 +314,15 @@ inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
     *obstacle_prev_itr,
     *(obstacle_polygon.begin()) - *obstacle_prev_itr}); 
 
-  return calculate_obstacle_avoidance_path(path, polygon_lines);
+  return calculate_obstacle_avoidance_path(path, polygon_lines, threshold_distance);
 }
 
 inline std::deque<Eigen::Vector2d> calculate_obstacle_avoidance_path(
   std::deque<Eigen::Vector2d> path,
-  const std::vector<std::vector<Eigen::Vector2d>> & obstacle_polygons)
+  const std::vector<std::vector<Eigen::Vector2d>> & obstacle_polygons, double threshold_distance  )
 {
   for (const auto & obstacle_polygon_points : obstacle_polygons) {
-    path = calculate_obstacle_avoidance_path(path, obstacle_polygon_points);
+    path = calculate_obstacle_avoidance_path(path, obstacle_polygon_points, threshold_distance);
   }
   return path;
 }

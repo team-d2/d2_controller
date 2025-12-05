@@ -131,6 +131,7 @@ private:
 
     // reset global_plan if empty
     if (global_plan->data.data.empty()) {
+      local_plan_pub_->publish(*global_plan);
       global_plan_.reset();
       return;
     }

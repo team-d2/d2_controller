@@ -25,6 +25,7 @@
 #include "d2_costmap_converter_msgs/msg/obstacle_array_msg.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "d2/controller/calculate_obstacle_avoidance_path.hpp"
+#include "d2/controller/smooth_path.hpp"
 #include "visibility.hpp"
 
 namespace d2::controller::ros2
@@ -44,6 +45,9 @@ public:
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
   : rclcpp::Node(node_name, node_namespace, options),
     frame_id_(this->declare_parameter("frame_id", "map")),
+    path_smoothing_count_(this->declare_parameter("path_smoothing_count", 2)),
+    path_smoothing_distance_(this->declare_parameter("path_smoothing_distance", 0.5)),
+    threshold_distance_(this->declare_parameter("threshold_distance", 0.2)),
     avoidanced_plan_publisher_(this->create_avoidanced_plan_publisher()),
     plan_subscription_(this->create_plan_subscription()),
     obstacles_subscription_(this->create_obstacles_subscription())
@@ -69,7 +73,16 @@ private:
 
   void publish_avoidanced_plan(const builtin_interfaces::msg::Time & stamp)
   {
-    auto avoidanced_path = calculate_obstacle_avoidance_path(original_plan_, obstacles_);
+    auto avoidanced_path = calculate_obstacle_avoidance_path(original_plan_, obstacles_, threshold_distance_);
+    for (int i = 0; i < path_smoothing_count_; ++i) {
+      avoidanced_path = smooth_path(avoidanced_path, path_smoothing_distance_);
+      avoidanced_path = calculate_obstacle_avoidance_path(avoidanced_path, obstacles_, threshold_distance_);
+    }
+
+    if (avoidanced_path.empty()) {
+      return;
+    }
+
     auto avoidanced_path_msg = std::make_unique<PathMsg>();
     avoidanced_path_msg->header.frame_id = frame_id_;
     avoidanced_path_msg->header.stamp = stamp;
@@ -78,7 +91,16 @@ private:
       geometry_msgs::msg::PoseStamped pose_stamped;
       pose_stamped.pose.position.x = point.x();
       pose_stamped.pose.position.y = point.y();
+      avoidanced_path_msg->poses.push_back(std::move(pose_stamped));
     }
+
+    if (!avoidanced_path_msg->poses.empty()) {
+      avoidanced_path_msg->poses.front().pose.orientation.w = initial_orientation_.w();
+      avoidanced_path_msg->poses.front().pose.orientation.x = initial_orientation_.x();
+      avoidanced_path_msg->poses.front().pose.orientation.y = initial_orientation_.y();
+      avoidanced_path_msg->poses.front().pose.orientation.z = initial_orientation_.z();
+    }
+
     avoidanced_plan_publisher_->publish(std::move(avoidanced_path_msg));
   }
 
@@ -91,6 +113,8 @@ private:
       return;
     }
 
+    last_plan_time_ = rclcpp::Time(plan_msg->header.stamp);
+
     original_plan_.clear();
     for (const auto & pose_stamped : plan_msg->poses) {
       original_plan_.emplace_back(
@@ -98,9 +122,14 @@ private:
         pose_stamped.pose.position.y);
     }
 
-    if (original_plan_.empty() || obstacles_.empty()) {
+    if (original_plan_.empty()) {
       return;
     }
+
+    initial_orientation_.w() = plan_msg->poses.front().pose.orientation.w;
+    initial_orientation_.x() = plan_msg->poses.front().pose.orientation.x;
+    initial_orientation_.y() = plan_msg->poses.front().pose.orientation.y;
+    initial_orientation_.z() = plan_msg->poses.front().pose.orientation.z;
 
     this->publish_avoidanced_plan(plan_msg->header.stamp);
   }
@@ -144,7 +173,8 @@ private:
     options.qos_overriding_options = {
       rclcpp::QosPolicyKind::Depth,
       rclcpp::QosPolicyKind::History,
-      rclcpp::QosPolicyKind::Reliability};
+      rclcpp::QosPolicyKind::Reliability,
+      rclcpp::QosPolicyKind::Durability};
     return this->create_publisher<PathMsg>("avoidanced_plan", rclcpp::QoS(10).best_effort(), options);
   }
 
@@ -154,7 +184,8 @@ private:
     options.qos_overriding_options = {
       rclcpp::QosPolicyKind::Depth,
       rclcpp::QosPolicyKind::History,
-      rclcpp::QosPolicyKind::Reliability};
+      rclcpp::QosPolicyKind::Reliability,
+      rclcpp::QosPolicyKind::Durability};
     options.use_intra_process_comm = rclcpp::IntraProcessSetting::Disable;
     return this->create_subscription<PathMsg>(
       "plan", rclcpp::QoS(10).best_effort(),
@@ -167,7 +198,8 @@ private:
     options.qos_overriding_options = {
       rclcpp::QosPolicyKind::Depth,
       rclcpp::QosPolicyKind::History,
-      rclcpp::QosPolicyKind::Reliability};
+      rclcpp::QosPolicyKind::Reliability,
+      rclcpp::QosPolicyKind::Durability};
     return this->create_subscription<ObstacleArrayMsg>(
       "obstacles", rclcpp::QoS(10).best_effort(),
       [this](ObstacleArrayMsg::ConstSharedPtr msg) {this->update_obstacles(std::move(msg));}, options);
@@ -175,9 +207,14 @@ private:
 
   // parameters
   std::string frame_id_;
+  int path_smoothing_count_;
+  double path_smoothing_distance_;
+  double threshold_distance_;
 
   std::vector<std::vector<Eigen::Vector2d>> obstacles_;
   std::deque<Eigen::Vector2d> original_plan_;
+  Eigen::Quaterniond initial_orientation_;
+  rclcpp::Time last_plan_time_;
 
   // vel_limit publisher
   rclcpp::Publisher<PathMsg>::SharedPtr avoidanced_plan_publisher_;

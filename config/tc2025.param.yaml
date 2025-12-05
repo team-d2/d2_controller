@@ -1,14 +1,14 @@
 /**:
   ros__parameters:
     frame_id: "map"
-    path_smoothing.count: 2
-    path_smoothing.distance: 2.0
+    path_smoothing.count: 10
+    path_smoothing.distance: 0.75
     threshold_distance: 0.5
     purepursuit:
-      lookahead_distance: 3.0
+      lookahead_distance: 1.5
     follow_point:
-      vel_per_distance: 0.6
-      margin_distance: 2.0
+      vel_per_distance: 1.2
+      margin_distance: 1.0
     obstacle_speed_limitter:
       speed_per_distance: 1.0
       offset_distance: 0.7
@@ -28,7 +28,7 @@
       angular:
         x: .inf
         y: .inf
-        z: 0.6
+        z: 0.2
     accel_limit:
       linear:
         x: 1.0
@@ -76,13 +76,13 @@
         publisher:
           depth: 10
           history: keep_last
-          reliability: best_effort
-          durability: volatile
+          reliability: reliable
+          durability: transient_local
         subscription:
           depth: 10
           history: keep_last
-          reliability: best_effort
-          durability: volatile
+          reliability: reliable
+          durability: transient_local
       $(var lidar_points_topic_name):
         subscription:
           depth: 10
