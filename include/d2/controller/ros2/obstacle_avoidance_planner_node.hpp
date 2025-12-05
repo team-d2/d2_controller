@@ -24,8 +24,9 @@
 #include "rclcpp/node.hpp"
 #include "d2_costmap_converter_msgs/msg/obstacle_array_msg.hpp"
 #include "nav_msgs/msg/path.hpp"
-#include "d2/controller/calculate_obstacle_avoidance_path.hpp"
+#include "d2/controller/calculate_obstacle_avoidance_path3.hpp"
 #include "d2/controller/smooth_path.hpp"
+#include "d2/controller/remove_path_self_intersection.hpp"
 #include "visibility.hpp"
 
 namespace d2::controller::ros2
@@ -48,6 +49,7 @@ public:
     path_smoothing_count_(this->declare_parameter("path_smoothing_count", 2)),
     path_smoothing_distance_(this->declare_parameter("path_smoothing_distance", 0.5)),
     threshold_distance_(this->declare_parameter("threshold_distance", 0.2)),
+    was_avoidance_direction_forward_(true),
     avoidanced_plan_publisher_(this->create_avoidanced_plan_publisher()),
     plan_subscription_(this->create_plan_subscription()),
     obstacles_subscription_(this->create_obstacles_subscription())
@@ -73,11 +75,57 @@ private:
 
   void publish_avoidanced_plan(const builtin_interfaces::msg::Time & stamp)
   {
-    auto avoidanced_path = calculate_obstacle_avoidance_path(original_plan_, obstacles_, threshold_distance_);
+    ObstacleAvoidancePathParams param;
+    param.penetration_limit = threshold_distance_;
+    param.is_avoidance_direction_forward = true;
+    auto f_avoidanced_path = calculate_obstacle_avoidance_path(original_plan_, obstacles_, param);
+
     for (int i = 0; i < path_smoothing_count_; ++i) {
-      avoidanced_path = smooth_path(avoidanced_path, path_smoothing_distance_);
-      avoidanced_path = calculate_obstacle_avoidance_path(avoidanced_path, obstacles_, threshold_distance_);
+      f_avoidanced_path = smooth_path(f_avoidanced_path, path_smoothing_distance_);
+      f_avoidanced_path = remove_path_self_intersection(f_avoidanced_path);
+      f_avoidanced_path = calculate_obstacle_avoidance_path(f_avoidanced_path, obstacles_, param);
     }
+
+
+    param.is_avoidance_direction_forward = false;
+    auto b_avoidanced_path = calculate_obstacle_avoidance_path(original_plan_, obstacles_, param);
+
+    for (int i = 0; i < path_smoothing_count_; ++i) {
+      b_avoidanced_path = smooth_path(b_avoidanced_path, path_smoothing_distance_);
+      b_avoidanced_path = remove_path_self_intersection(b_avoidanced_path);
+      b_avoidanced_path = calculate_obstacle_avoidance_path(b_avoidanced_path, obstacles_, param);
+    }
+
+    auto f_avoidanced_path_length = 0.0;
+    if (f_avoidanced_path.empty()) {
+      f_avoidanced_path_length = std::numeric_limits<double>::infinity();
+    }
+    else {
+      for (auto itr = std::next(f_avoidanced_path.begin()); itr != f_avoidanced_path.end(); ++itr) {
+        f_avoidanced_path_length += (*(itr) - *(std::prev(itr))).norm();
+      }
+      f_avoidanced_path_length += (original_plan_.back() - f_avoidanced_path.back()).norm() * 3.0;
+      if (!was_avoidance_direction_forward_) {
+        f_avoidanced_path_length += 10.0;
+      }
+    }
+
+    auto b_avoidanced_path_length = 0.0;
+    if (b_avoidanced_path.empty()) {
+      b_avoidanced_path_length = std::numeric_limits<double>::infinity();
+    }
+    else {
+      for (auto itr = std::next(b_avoidanced_path.begin()); itr != b_avoidanced_path.end(); ++itr) {
+        b_avoidanced_path_length += (*(itr) - *(std::prev(itr))).norm();
+      }
+      b_avoidanced_path_length += (original_plan_.back() - b_avoidanced_path.back()).norm() * 3.0;
+      if (was_avoidance_direction_forward_) {
+        b_avoidanced_path_length += 10.0;
+      }
+    }
+
+    const auto & avoidanced_path = f_avoidanced_path_length < b_avoidanced_path_length ? f_avoidanced_path : b_avoidanced_path;
+    was_avoidance_direction_forward_ = f_avoidanced_path_length < b_avoidanced_path_length;
 
     if (avoidanced_path.empty()) {
       return;
@@ -210,6 +258,7 @@ private:
   int path_smoothing_count_;
   double path_smoothing_distance_;
   double threshold_distance_;
+  bool was_avoidance_direction_forward_;
 
   std::vector<std::vector<Eigen::Vector2d>> obstacles_;
   std::deque<Eigen::Vector2d> original_plan_;

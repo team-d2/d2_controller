@@ -1,8 +1,8 @@
 /**:
   ros__parameters:
     frame_id: "map"
-    path_smoothing.count: 10
-    path_smoothing.distance: 0.75
+    path_smoothing_count: 10
+    path_smoothing_distance: 0.75
     threshold_distance: 0.5
     purepursuit:
       lookahead_distance: 1.5
@@ -83,6 +83,17 @@
           history: keep_last
           reliability: reliable
           durability: transient_local
+      $(var namespace)/$(var controller_name)/local_plan_avoidanced:
+        publisher:
+          depth: 10
+          history: keep_last
+          reliability: best_effort
+          durability: volatile
+        subscription:
+          depth: 10
+          history: keep_last
+          reliability: best_effort
+          durability: volatile
       $(var lidar_points_topic_name):
         subscription:
           depth: 10
